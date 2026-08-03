@@ -254,6 +254,10 @@ export default function ClientHome({
     }
   };
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
   // Admin Actions
   const handleAdminLogin = async (password: string): Promise<boolean> => {
     if (password === 'admin' || password === 'admin123') {

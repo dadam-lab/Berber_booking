@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // GET: Fetch gallery photos
 export async function GET() {
@@ -20,7 +21,7 @@ export async function GET() {
       { gallery: data || [] },
       {
         headers: {
-          'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         },
       }
     );

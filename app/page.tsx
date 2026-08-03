@@ -3,7 +3,8 @@ import { getSettingsMap, supabaseAdmin } from '@/lib/supabase';
 import { Service, GalleryItem, Reservation } from '@/lib/types';
 import ClientHome from '@/components/ClientHome';
 
-export const revalidate = 60; // Incremental Static Regeneration: Cache pre-rendered page for 60s
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function Home() {
   let initialSettings: Record<string, string> = {};

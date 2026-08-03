@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendCancellationEmail } from '@/lib/resend';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // GET: List all orders
 export async function GET() {
@@ -18,7 +19,14 @@ export async function GET() {
       return NextResponse.json({ error: error.message || 'Chyba načítání objednávek.' }, { status: 500 });
     }
 
-    return NextResponse.json({ orders: data || [] });
+    return NextResponse.json(
+      { orders: data || [] },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

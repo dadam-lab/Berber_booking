@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // GET: Fetch availability for client picker or admin calendar
 export async function GET(request: Request) {
@@ -54,7 +55,14 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ availability });
+    return NextResponse.json(
+      { availability },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
