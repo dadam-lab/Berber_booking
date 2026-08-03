@@ -19,9 +19,11 @@ export async function GET(request: Request) {
     } else if (startDate && endDate) {
       query = query.gte('date', startDate).lte('date', endDate);
     } else {
-      // Default: fetch from today up to 365 days ahead
-      const today = new Date().toISOString().split('T')[0];
-      query = query.gte('date', today);
+      // Default: fetch for current month + next month (60 days) to prevent huge mobile JSON payloads
+      const todayObj = new Date();
+      const today = todayObj.toISOString().split('T')[0];
+      const future60 = new Date(todayObj.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      query = query.gte('date', today).lte('date', future60);
     }
 
     const { data: dbSlots, error } = await query.order('time', { ascending: true });

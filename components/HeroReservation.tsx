@@ -52,7 +52,10 @@ export const HeroReservation: React.FC<HeroReservationProps> = ({
 
   // Fetch all configured dates & slots from Supabase DB on component mount
   const loadAvailability = () => {
-    fetch('/api/availability')
+    const todayISO = new Date().toISOString().split('T')[0];
+    const future60ISO = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    fetch(`/api/availability?startDate=${todayISO}&endDate=${future60ISO}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.availability && Array.isArray(data.availability)) {
