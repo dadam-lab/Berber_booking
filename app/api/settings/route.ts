@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin, getSettingsMap } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 5;
 
 // GET: Fetch all key-value settings
 export async function GET() {
@@ -12,7 +12,7 @@ export async function GET() {
       { settings },
       {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Cache-Control': 's-maxage=5, stale-while-revalidate=30',
         },
       }
     );

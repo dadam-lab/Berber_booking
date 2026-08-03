@@ -4,7 +4,7 @@ import { Service, GalleryItem, Reservation } from '@/lib/types';
 import ClientHome from '@/components/ClientHome';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 5; // Revalidate static edge cache every 5s for 30ms mobile load speed
 
 export default async function Home() {
   let initialSettings: Record<string, string> = {};
