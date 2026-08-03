@@ -82,14 +82,18 @@ export async function POST(request: Request) {
       console.error('[Cancel Booking Error] Availability update failed:', availError);
     }
 
-    // 4. Odeslat storno e-mail klientovi a barberovi (asynchronně)
-    sendCancellationEmail({
-      clientEmail: order.client_email,
-      clientName: order.client_name,
-      serviceTitle: order.service_title,
-      date: order.date,
-      time: order.time,
-    }).catch((err) => console.error('[Cancel Booking Email Error]:', err));
+    // 4. Odeslat storno e-mail klientovi a barberovi (Awaited for Vercel)
+    try {
+      await sendCancellationEmail({
+        clientEmail: order.client_email,
+        clientName: order.client_name,
+        serviceTitle: order.service_title,
+        date: order.date,
+        time: order.time,
+      });
+    } catch (err) {
+      console.error('[Cancel Booking Email Error]:', err);
+    }
 
     return NextResponse.json({
       success: true,

@@ -111,17 +111,21 @@ export async function POST(request: Request) {
         }, { onConflict: 'date,time' });
     }
 
-    // 6. Trigger Resend Emails (Async)
-    sendBookingEmails({
-      orderId: newOrder.id,
-      clientName: client_name,
-      clientEmail: client_email,
-      note,
-      serviceTitle: service.title,
-      servicePrice: service.price,
-      date,
-      time,
-    }).catch((err) => console.error('Email trigger background error:', err));
+    // 6. Send Booking Emails (Awaited for Vercel Serverless execution)
+    try {
+      await sendBookingEmails({
+        orderId: newOrder.id,
+        clientName: client_name,
+        clientEmail: client_email,
+        note,
+        serviceTitle: service.title,
+        servicePrice: service.price,
+        date,
+        time,
+      });
+    } catch (emailErr) {
+      console.error('[Booking Email Error]:', emailErr);
+    }
 
     // 7. Sync event to Barber Google Calendar via Service Account API (Async)
     createGoogleCalendarEvent({

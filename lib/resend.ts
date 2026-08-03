@@ -4,13 +4,21 @@ import { getSettingsMap } from './supabase';
 /**
  * Nodemailer Gmail Transporter using environment variables EMAIL_USER and EMAIL_APP_PASSWORD
  */
-export const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD,
-  },
-});
+export function getTransporter() {
+  const user = process.env.EMAIL_USER;
+  const rawPass = process.env.EMAIL_APP_PASSWORD || '';
+  const pass = rawPass.replace(/\s+/g, ''); // strip any spaces in Gmail App Password
+
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // SSL connection for Serverless environments like Vercel
+    auth: {
+      user,
+      pass,
+    },
+  });
+}
 
 function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_APP_URL) {
@@ -157,14 +165,15 @@ export async function sendBookingEmails(booking: {
   `;
 
   try {
+    const mailer = getTransporter();
     const [clientRes, barberRes] = await Promise.all([
-      transporter.sendMail({
+      mailer.sendMail({
         from: `"${barberName}" <${emailUser}>`,
         to: booking.clientEmail,
         subject: `Potvrzení termínu - ${booking.serviceTitle}`,
         html: clientHtml,
       }),
-      transporter.sendMail({
+      mailer.sendMail({
         from: `"${barberName}" <${emailUser}>`,
         to: barberEmail,
         subject: `Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
@@ -232,20 +241,25 @@ export async function sendCancellationEmail(details: {
     </div>
   `;
 
-  await Promise.all([
-    transporter.sendMail({
-      from: `"${barberName}" <${emailUser}>`,
-      to: details.clientEmail,
-      subject: `Storno rezervace - ${details.date} ${details.time}`,
-      html,
-    }),
-    transporter.sendMail({
-      from: `"${barberName}" <${emailUser}>`,
-      to: barberEmail,
-      subject: `[Storno] Rezervace zrušena: ${details.clientName} (${details.date})`,
-      html,
-    }),
-  ]);
+  try {
+    const mailer = getTransporter();
+    await Promise.all([
+      mailer.sendMail({
+        from: `"${barberName}" <${emailUser}>`,
+        to: details.clientEmail,
+        subject: `Storno rezervace - ${details.date} ${details.time}`,
+        html,
+      }),
+      mailer.sendMail({
+        from: `"${barberName}" <${emailUser}>`,
+        to: barberEmail,
+        subject: `[Storno] Rezervace zrušena: ${details.clientName} (${details.date})`,
+        html,
+      }),
+    ]);
+  } catch (err) {
+    console.error('[Nodemailer Storno Error]:', err);
+  }
 }
 
 
