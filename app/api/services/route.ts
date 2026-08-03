@@ -38,7 +38,6 @@ export async function POST(request: Request) {
     if (Array.isArray(body.services)) {
       const incomingServices = body.services;
 
-      // Prepare items to upsert / insert
       const validUuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const keepIds: string[] = [];
 
@@ -52,7 +51,7 @@ export async function POST(request: Request) {
         if (!title) continue;
 
         if (srv.id && validUuidRegex.test(srv.id)) {
-          // Update / Upsert existing service by UUID
+          // Upsert existing service by UUID
           const { data, error } = await supabaseAdmin
             .from('services')
             .upsert({
@@ -63,11 +62,12 @@ export async function POST(request: Request) {
               duration_minutes,
               is_active,
             })
-            .select()
-            .single();
+            .select();
 
-          if (data && !error) {
-            keepIds.push(data.id);
+          if (error) {
+            console.error('[Services Batch Upsert Error]:', error);
+          } else if (data && data.length > 0) {
+            keepIds.push(data[0].id);
           }
         } else {
           // Insert new service without temporary ID
@@ -80,31 +80,40 @@ export async function POST(request: Request) {
               duration_minutes,
               is_active,
             })
-            .select()
-            .single();
+            .select();
 
-          if (data && !error) {
-            keepIds.push(data.id);
+          if (error) {
+            console.error('[Services Batch Insert Error]:', error);
+          } else if (data && data.length > 0) {
+            keepIds.push(data[0].id);
           }
         }
       }
 
-      // Delete any service in DB that was removed in Admin modal
+      // Safely delete services that were removed in the UI
       if (keepIds.length > 0) {
         const { data: allServices } = await supabaseAdmin.from('services').select('id');
-        if (allServices) {
+        if (allServices && allServices.length > 0) {
           const idsToDelete = allServices.map((s) => s.id).filter((id) => !keepIds.includes(id));
           if (idsToDelete.length > 0) {
-            await supabaseAdmin.from('services').delete().in('id', idsToDelete);
+            try {
+              await supabaseAdmin.from('services').delete().in('id', idsToDelete);
+            } catch (delErr) {
+              console.error('[Services Delete Error]:', delErr);
+            }
           }
         }
       }
 
-      // Fetch fresh list
-      const { data: freshServices } = await supabaseAdmin
+      // Fetch fresh services list from Supabase
+      const { data: freshServices, error: fetchErr } = await supabaseAdmin
         .from('services')
         .select('*')
         .order('created_at', { ascending: true });
+
+      if (fetchErr) {
+        console.error('[Services Fetch Fresh Error]:', fetchErr);
+      }
 
       return NextResponse.json({ success: true, services: freshServices || [] });
     }
@@ -125,14 +134,13 @@ export async function POST(request: Request) {
         duration_minutes: Number(duration_minutes || 30),
         is_active: is_active ?? true,
       })
-      .select()
-      .single();
+      .select();
 
     if (error) {
       return NextResponse.json({ error: 'Chyba při vytváření služby.' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, service: data });
+    return NextResponse.json({ success: true, service: data ? data[0] : null });
   } catch (err: any) {
     console.error('[Services POST Exception]:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -160,15 +168,14 @@ export async function PUT(request: Request) {
       .from('services')
       .update(updateData)
       .eq('id', id)
-      .select()
-      .single();
+      .select();
 
     if (error) {
       console.error('[Services PUT Error]:', error);
       return NextResponse.json({ error: error.message || 'Chyba při úpravě služby.' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, service: data });
+    return NextResponse.json({ success: true, service: data ? data[0] : null });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
