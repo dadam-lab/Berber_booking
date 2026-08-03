@@ -167,6 +167,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   };
 
   useEffect(() => {
+    if (isOpen) {
+      setServicesDraft(services);
+      setGalleryDraft(gallery);
+      setCmsDraft(cmsConfig);
+    }
+  }, [isOpen, services, gallery, cmsConfig]);
+
+  useEffect(() => {
     if (isOpen && activeTab === 'schedules' && selectedCalendarDate) {
       fetchAvailabilityForDate(selectedCalendarDate);
     }
@@ -1220,16 +1228,17 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             type="text"
                             value={srv.name}
                             onChange={(e) => {
-                              const updated = [...servicesDraft];
-                              updated[idx].name = e.target.value;
-                              setServicesDraft(updated);
+                              const val = e.target.value;
+                              setServicesDraft((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, name: val } : item))
+                              );
                             }}
                             className="font-bold text-sm bg-zinc-900 px-3 py-1.5 rounded border border-zinc-800 text-amber-400 w-full"
                           />
                           <button
                             type="button"
                             onClick={() => {
-                              setServicesDraft(servicesDraft.filter((_, i) => i !== idx));
+                              setServicesDraft((prev) => prev.filter((_, i) => i !== idx));
                             }}
                             className="p-1.5 rounded bg-rose-950 text-rose-300 hover:bg-rose-900"
                             title="Odstranit"
@@ -1245,9 +1254,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               type="number"
                               value={srv.price}
                               onChange={(e) => {
-                                const updated = [...servicesDraft];
-                                updated[idx].price = Number(e.target.value);
-                                setServicesDraft(updated);
+                                const val = Number(e.target.value);
+                                setServicesDraft((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, price: val } : item))
+                                );
                               }}
                               className="w-full px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-100"
                             />
@@ -1259,9 +1269,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               step="5"
                               value={srv.durationMinutes}
                               onChange={(e) => {
-                                const updated = [...servicesDraft];
-                                updated[idx].durationMinutes = Number(e.target.value);
-                                setServicesDraft(updated);
+                                const val = Number(e.target.value);
+                                setServicesDraft((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, durationMinutes: val } : item))
+                                );
                               }}
                               className="w-full px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-100"
                             />
@@ -1271,9 +1282,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             <select
                               value={srv.active ? 'true' : 'false'}
                               onChange={(e) => {
-                                const updated = [...servicesDraft];
-                                updated[idx].active = e.target.value === 'true';
-                                setServicesDraft(updated);
+                                const val = e.target.value === 'true';
+                                setServicesDraft((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, active: val } : item))
+                                );
                               }}
                               className="w-full px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-100"
                             >
@@ -1289,9 +1301,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             type="text"
                             value={srv.description}
                             onChange={(e) => {
-                              const updated = [...servicesDraft];
-                              updated[idx].description = e.target.value;
-                              setServicesDraft(updated);
+                              const val = e.target.value;
+                              setServicesDraft((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, description: val } : item))
+                              );
                             }}
                             className="w-full px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-200"
                           />
