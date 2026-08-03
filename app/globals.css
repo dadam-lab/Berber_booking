@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700&family=Montserrat:wght@500;600;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-color: #FFFFFF;
+  --secondary-color: #10B981;
+  --bg-color: #050505;
+  --card-bg: #121212;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --text-primary: #F4F4F5;
+  --text-dim: #888888;
+  --font-body: 'Outfit', sans-serif;
+  --font-heading: 'Georgia', serif;
+}
+
+.dark {
+  --bg-color: #050505;
+  --card-bg: #121212;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --text-primary: #F4F4F5;
+  --text-dim: #888888;
+}
+
+.light {
+  --bg-color: #FAFAFA;
+  --card-bg: #FFFFFF;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --text-primary: #18181B;
+  --text-dim: #71717A;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+h1, h2, h3, .font-heading {
+  font-family: var(--font-heading);
+}
+
+/* Touch targets optimization */
+button, input, select, textarea, a {
+  touch-action: manipulation;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 9999px;
+}
