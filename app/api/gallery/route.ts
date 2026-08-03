@@ -16,7 +16,14 @@ export async function GET() {
       return NextResponse.json({ gallery: [], error: error.message });
     }
 
-    return NextResponse.json({ gallery: data || [] });
+    return NextResponse.json(
+      { gallery: data || [] },
+      {
+        headers: {
+          'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
   } catch (err: any) {
     console.error('[Gallery GET Exception]:', err);
     return NextResponse.json({ gallery: [], error: err.message });

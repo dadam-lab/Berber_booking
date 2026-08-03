@@ -184,11 +184,17 @@ export default function Home() {
     }
   }, [cmsConfig]);
 
-  // Initial Data Fetching from Supabase API endpoints
+  // Initial Data Fetching from Supabase API endpoints (Parallelized via Promise.all)
   const loadData = async () => {
     try {
+      const [resSettings, resServices, resGallery, resOrders] = await Promise.all([
+        fetch('/api/settings'),
+        fetch('/api/services'),
+        fetch('/api/gallery'),
+        fetch('/api/orders'),
+      ]);
+
       // 1. Settings
-      const resSettings = await fetch('/api/settings');
       if (resSettings.ok) {
         const dataS = await resSettings.json();
         if (dataS.settings) {
@@ -226,7 +232,6 @@ export default function Home() {
       }
 
       // 2. Services
-      const resServices = await fetch('/api/services');
       if (resServices.ok) {
         const dataServ = await resServices.json();
         if (dataServ.services && dataServ.services.length > 0) {
@@ -245,7 +250,6 @@ export default function Home() {
       }
 
       // 3. Gallery
-      const resGallery = await fetch('/api/gallery');
       if (resGallery.ok) {
         const dataGal = await resGallery.json();
         if (dataGal.gallery && dataGal.gallery.length > 0) {
@@ -260,7 +264,6 @@ export default function Home() {
       }
 
       // 4. Orders / Reservations
-      const resOrders = await fetch('/api/orders');
       if (resOrders.ok) {
         const dataOrders = await resOrders.json();
         if (dataOrders.orders) {

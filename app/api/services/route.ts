@@ -15,7 +15,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Chyba načítání služeb.' }, { status: 500 });
     }
 
-    return NextResponse.json({ services: data || [] });
+    return NextResponse.json(
+      { services: data || [] },
+      {
+        headers: {
+          'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

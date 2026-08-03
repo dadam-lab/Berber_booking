@@ -7,7 +7,14 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const settings = await getSettingsMap();
-    return NextResponse.json({ settings });
+    return NextResponse.json(
+      { settings },
+      {
+        headers: {
+          'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
