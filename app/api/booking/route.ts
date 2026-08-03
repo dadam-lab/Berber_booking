@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendBookingEmails } from '@/lib/resend';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
+import { waitUntil } from '@vercel/functions';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,9 +112,9 @@ export async function POST(request: Request) {
         }, { onConflict: 'date,time' });
     }
 
-    // 6. Send Booking Emails (Awaited for Vercel Serverless execution)
-    try {
-      await sendBookingEmails({
+    // 6. Send Booking Emails & GCal sync in background via Vercel waitUntil
+    waitUntil(
+      sendBookingEmails({
         orderId: newOrder.id,
         clientName: client_name,
         clientEmail: client_email,
@@ -122,21 +123,21 @@ export async function POST(request: Request) {
         servicePrice: service.price,
         date,
         time,
-      });
-    } catch (emailErr) {
-      console.error('[Booking Email Error]:', emailErr);
-    }
+      }).catch((emailErr) => console.error('[Booking Email Error]:', emailErr))
+    );
 
     // 7. Sync event to Barber Google Calendar via Service Account API (Async)
-    createGoogleCalendarEvent({
-      summary: service.title,
-      description: note ? `Poznámka: ${note}` : 'Bez poznámky',
-      date,
-      time,
-      durationMinutes: service.duration_minutes || 30,
-      clientEmail: client_email,
-      clientName: client_name,
-    }).catch((err) => console.error('Google Calendar sync background error:', err));
+    waitUntil(
+      createGoogleCalendarEvent({
+        summary: service.title,
+        description: note ? `Poznámka: ${note}` : 'Bez poznámky',
+        date,
+        time,
+        durationMinutes: service.duration_minutes || 30,
+        clientEmail: client_email,
+        clientName: client_name,
+      }).catch((err) => console.error('Google Calendar sync background error:', err))
+    );
 
     return NextResponse.json({
       success: true,

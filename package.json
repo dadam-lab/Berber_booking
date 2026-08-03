@@ -12,6 +12,7 @@
     "@supabase/supabase-js": "^2.39.8",
     "@types/canvas-confetti": "^1.9.0",
     "@types/nodemailer": "^8.0.1",
+    "@vercel/functions": "^3.7.6",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",

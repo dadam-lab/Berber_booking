@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { getSettingsMap } from './supabase';
+import { getGoogleCalendarUrl, getAppleCalendarUrl, generateICSContent } from './ics';
 
 /**
  * Nodemailer Gmail Transporter using environment variables EMAIL_USER and EMAIL_APP_PASSWORD
@@ -53,8 +54,8 @@ export async function sendBookingEmails(booking: {
 
   const settings = await getSettingsMap();
   const barberEmail = settings['contact_email'] || emailUser;
-  const barberName = settings['barber_name'] || 'Barber Studio';
-  const logoUrl = settings['logo_url'] || '';
+  const barberName = 'SW-Barber';
+  const address = settings['contact_address'] || 'SW-Barber Studio';
 
   const formattedDate = new Date(`${booking.date}T${booking.time}`).toLocaleDateString('cs-CZ', {
     weekday: 'long',
@@ -66,17 +67,30 @@ export async function sendBookingEmails(booking: {
   const baseUrl = getBaseUrl();
   const cancelUrl = `${baseUrl}/zrusit-rezervaci?id=${booking.orderId}`;
 
-  // Header HTML (Logo + Barber Shop Name in the corner)
+  // Calendar Event & Links
+  const eventData = {
+    title: `SW-Barber: ${booking.serviceTitle}`,
+    description: `Rezervovaný termín v SW-Barber pro ${booking.clientName}.${booking.note ? ` Poznámka: ${booking.note}` : ''}`,
+    location: address,
+    startDate: booking.date,
+    startTime: booking.time,
+    durationMinutes: 45,
+  };
+
+  const googleCalUrl = getGoogleCalendarUrl(eventData);
+  const outlookCalUrl = getAppleCalendarUrl(eventData);
+  const icsContent = generateICSContent(eventData);
+
+  // Header HTML (Clean SW-Barber text title, no logo image)
   const headerHtml = `
-    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 24px;">
-      <div style="font-size: 20px; font-weight: bold; letter-spacing: 1px; color: #ffffff; text-transform: uppercase;">
-        ${barberName}
+    <div style="border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 24px;">
+      <div style="font-size: 22px; font-weight: 800; letter-spacing: 1.5px; color: #ffffff; text-transform: uppercase;">
+        SW-Barber
       </div>
-      ${logoUrl ? `<img src="${logoUrl}" alt="${barberName}" style="max-height: 40px; max-width: 120px; object-fit: contain;" />` : ''}
     </div>
   `;
 
-  // 1. Send confirmation to Client (Black background, white elements)
+  // 1. Client Confirmation HTML Email
   const clientHtml = `
     <div style="background-color: #09090b; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; border-radius: 12px; border: 1px solid #27272a;">
       ${headerHtml}
@@ -84,7 +98,7 @@ export async function sendBookingEmails(booking: {
       <h2 style="color: #ffffff; font-size: 22px; margin-top: 0; margin-bottom: 16px;">Potvrzení rezervace</h2>
       <p style="color: #e4e4e7; font-size: 15px; line-height: 1.5; margin-bottom: 20px;">
         Ahoj <strong>${booking.clientName}</strong>,<br/>
-        tvůj termín byl úspěšně zaregistrován a těšíme se na tebe.
+        tvůj termín byl úspěšně zaregistrován a těšíme se na tebe v SW-Barber.
       </p>
       
       <table style="width: 100%; border-collapse: collapse; margin: 24px 0; background-color: #121215; border: 1px solid #27272a; border-radius: 8px; overflow: hidden; font-size: 14px;">
@@ -111,6 +125,24 @@ export async function sendBookingEmails(booking: {
         </tbody>
       </table>
 
+      <!-- Mobile Calendar Deep Links -->
+      <div style="background-color: #121215; border: 1px solid #27272a; padding: 20px; border-radius: 8px; margin: 24px 0; text-align: center;">
+        <div style="font-size: 14px; font-weight: bold; color: #ffffff; margin-bottom: 12px;">
+          📅 Uložit termín do kalendáře v mobilu
+        </div>
+        <div style="margin-bottom: 12px;">
+          <a href="${googleCalUrl}" target="_blank" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-size: 13px; font-weight: bold; display: inline-block; margin: 4px;">
+            + Google Kalendář
+          </a>
+          <a href="${outlookCalUrl}" target="_blank" style="background-color: #27272a; color: #ffffff; border: 1px solid #3f3f46; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-size: 13px; font-weight: bold; display: inline-block; margin: 4px;">
+            + Apple / Outlook Kalendář
+          </a>
+        </div>
+        <div style="font-size: 11px; color: #71717a; line-height: 1.4;">
+          💡 V e-mailu je také přiložen soubor <strong>rezervace.ics</strong>. Na iPhone i Androidu stačí klepnout na přílohu pro přímé otevření aplikace Kalendář.
+        </div>
+      </div>
+
       <div style="background-color: #18181b; border-left: 3px solid #ffffff; padding: 14px 16px; border-radius: 4px; margin-top: 24px;">
         <p style="margin: 0; font-size: 14px; color: #e4e4e7;">
           <strong>Pokyny pro zákazníka:</strong> Prosíme, dorazte o 5 minut dříve před Vaším termínem.
@@ -118,18 +150,18 @@ export async function sendBookingEmails(booking: {
       </div>
 
       <div style="border-top: 1px solid #27272a; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 12px; color: #71717a;">
-        © ${new Date().getFullYear()} ${barberName}. Všechna práva vyhrazena.
+        © ${new Date().getFullYear()} SW-Barber. Všechna práva vyhrazena.
       </div>
     </div>
   `;
 
-  // 2. Send notification to Barber (Black background, white elements)
+  // 2. Barber Notification HTML Email
   const barberHtml = `
     <div style="background-color: #09090b; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; border-radius: 12px; border: 1px solid #27272a;">
       ${headerHtml}
       
       <h2 style="color: #ffffff; font-size: 22px; margin-top: 0; margin-bottom: 16px;">Nová rezervace!</h2>
-      <p style="color: #e4e4e7; font-size: 15px; margin-bottom: 20px;">Vytvořena nová objednávka přes rezervační systém:</p>
+      <p style="color: #e4e4e7; font-size: 15px; margin-bottom: 20px;">Vytvořena nová objednávka přes rezervační systém SW-Barber:</p>
       
       <table style="width: 100%; border-collapse: collapse; margin: 24px 0; background-color: #121215; border: 1px solid #27272a; border-radius: 8px; overflow: hidden; font-size: 14px;">
         <tbody>
@@ -159,7 +191,7 @@ export async function sendBookingEmails(booking: {
       </table>
 
       <div style="border-top: 1px solid #27272a; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 12px; color: #71717a;">
-        © ${new Date().getFullYear()} ${barberName}. Systém pro správa rezervací.
+        © ${new Date().getFullYear()} SW-Barber. Systém pro správu rezervací.
       </div>
     </div>
   `;
@@ -168,15 +200,22 @@ export async function sendBookingEmails(booking: {
     const mailer = getTransporter();
     const [clientRes, barberRes] = await Promise.all([
       mailer.sendMail({
-        from: `"${barberName}" <${emailUser}>`,
+        from: `"SW-Barber" <${emailUser}>`,
         to: booking.clientEmail,
-        subject: `Potvrzení termínu - ${booking.serviceTitle}`,
+        subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle}`,
         html: clientHtml,
+        attachments: [
+          {
+            filename: 'rezervace.ics',
+            content: icsContent,
+            contentType: 'text/calendar; method=REQUEST; charset=UTF-8',
+          },
+        ],
       }),
       mailer.sendMail({
-        from: `"${barberName}" <${emailUser}>`,
+        from: `"SW-Barber" <${emailUser}>`,
         to: barberEmail,
-        subject: `Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
+        subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
         html: barberHtml,
       }),
     ]);
@@ -205,15 +244,12 @@ export async function sendCancellationEmail(details: {
 
   const settings = await getSettingsMap();
   const barberEmail = settings['contact_email'] || emailUser;
-  const barberName = settings['barber_name'] || 'Barber Studio';
-  const logoUrl = settings['logo_url'] || '';
 
   const headerHtml = `
-    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 24px;">
-      <div style="font-size: 20px; font-weight: bold; letter-spacing: 1px; color: #ffffff; text-transform: uppercase;">
-        ${barberName}
+    <div style="border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 24px;">
+      <div style="font-size: 22px; font-weight: 800; letter-spacing: 1.5px; color: #ffffff; text-transform: uppercase;">
+        SW-Barber
       </div>
-      ${logoUrl ? `<img src="${logoUrl}" alt="${barberName}" style="max-height: 40px; max-width: 120px; object-fit: contain;" />` : ''}
     </div>
   `;
 
@@ -236,7 +272,7 @@ export async function sendCancellationEmail(details: {
       </div>
 
       <div style="border-top: 1px solid #27272a; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 12px; color: #71717a;">
-        © ${new Date().getFullYear()} ${barberName}. Všechna práva vyhrazena.
+        © ${new Date().getFullYear()} SW-Barber. Všechna práva vyhrazena.
       </div>
     </div>
   `;
@@ -245,15 +281,15 @@ export async function sendCancellationEmail(details: {
     const mailer = getTransporter();
     await Promise.all([
       mailer.sendMail({
-        from: `"${barberName}" <${emailUser}>`,
+        from: `"SW-Barber" <${emailUser}>`,
         to: details.clientEmail,
-        subject: `Storno rezervace - ${details.date} ${details.time}`,
+        subject: `SW-Barber | Storno rezervace - ${details.date} ${details.time}`,
         html,
       }),
       mailer.sendMail({
-        from: `"${barberName}" <${emailUser}>`,
+        from: `"SW-Barber" <${emailUser}>`,
         to: barberEmail,
-        subject: `[Storno] Rezervace zrušena: ${details.clientName} (${details.date})`,
+        subject: `SW-Barber | [Storno] Rezervace zrušena: ${details.clientName} (${details.date})`,
         html,
       }),
     ]);
@@ -261,5 +297,3 @@ export async function sendCancellationEmail(details: {
     console.error('[Nodemailer Storno Error]:', err);
   }
 }
-
-

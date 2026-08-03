@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendCancellationEmail } from '@/lib/resend';
+import { waitUntil } from '@vercel/functions';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,18 +83,16 @@ export async function POST(request: Request) {
       console.error('[Cancel Booking Error] Availability update failed:', availError);
     }
 
-    // 4. Odeslat storno e-mail klientovi a barberovi (Awaited for Vercel)
-    try {
-      await sendCancellationEmail({
+    // 4. Odeslat storno e-mail klientovi a barberovi na pozadí přes Vercel waitUntil
+    waitUntil(
+      sendCancellationEmail({
         clientEmail: order.client_email,
         clientName: order.client_name,
         serviceTitle: order.service_title,
         date: order.date,
         time: order.time,
-      });
-    } catch (err) {
-      console.error('[Cancel Booking Email Error]:', err);
-    }
+      }).catch((err) => console.error('[Cancel Booking Email Error]:', err))
+    );
 
     return NextResponse.json({
       success: true,
