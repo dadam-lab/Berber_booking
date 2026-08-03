@@ -172,7 +172,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       setGalleryDraft(gallery);
       setCmsDraft(cmsConfig);
     }
-  }, [isOpen, services, gallery, cmsConfig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && activeTab === 'schedules' && selectedCalendarDate) {
