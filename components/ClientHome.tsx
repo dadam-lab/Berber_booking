@@ -327,18 +327,28 @@ export default function ClientHome({
 
   const handleSaveServices = async (newServices: Service[]) => {
     try {
-      for (const srv of newServices) {
-        await fetch('/api/services', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: srv.name,
-            description: srv.description,
-            price: srv.price,
-            duration_minutes: srv.durationMinutes,
-            is_active: srv.active,
-          }),
-        });
+      const res = await fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ services: newServices }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.services && data.services.length > 0) {
+          const mappedServices: Service[] = data.services.map((item: any) => ({
+            id: item.id,
+            name: item.title,
+            description: item.description || '',
+            price: Number(item.price),
+            durationMinutes: item.duration_minutes || 30,
+            active: item.is_active ?? true,
+            badge: item.badge || undefined,
+            category: item.category || 'Střihy',
+          }));
+          setServices(mappedServices);
+          return;
+        }
       }
       setServices(newServices);
     } catch (err) {
