@@ -1,8 +1,8 @@
 import React from 'react';
-import { getCachedGallery } from '@/lib/data';
+import { getGallery } from '@/lib/data';
 import { GallerySection } from '@/components/GallerySection';
 
 export async function GallerySectionServer() {
-  const gallery = await getCachedGallery();
+  const gallery = await getGallery();
   return <GallerySection gallery={gallery} />;
 }
