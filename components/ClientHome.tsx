@@ -75,6 +75,7 @@ interface ClientHomeProps {
   initialServices?: Service[];
   initialGallery?: GalleryItem[];
   initialReservations?: Reservation[];
+  gallerySlot?: React.ReactNode;
 }
 
 export default function ClientHome({
@@ -82,6 +83,7 @@ export default function ClientHome({
   initialServices = [],
   initialGallery = [],
   initialReservations = [],
+  gallerySlot,
 }: ClientHomeProps) {
   // Merge initial settings into CmsConfig
   const [cmsConfig, setCmsConfig] = useState<CmsConfig>(() => {
@@ -418,7 +420,7 @@ export default function ClientHome({
         />
 
         <AboutSection cmsConfig={cmsConfig} />
-        <GallerySection gallery={gallery} />
+        {gallerySlot || <GallerySection gallery={gallery} />}
         <ContactSection cmsConfig={cmsConfig} />
       </main>
 

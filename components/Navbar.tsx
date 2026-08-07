@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import { Scissors, CalendarCheck } from 'lucide-react';
 import { CmsConfig } from '@/lib/types';
 
@@ -30,12 +31,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="flex items-center gap-2.5 sm:gap-3 text-left group cursor-pointer"
         >
           {cmsConfig.logoUrl ? (
-            <img
-              src={cmsConfig.logoUrl}
-              alt="Logo"
-              className="h-8 sm:h-10 w-auto rounded object-cover"
-              referrerPolicy="no-referrer"
-            />
+            <div className="relative h-8 sm:h-10 w-24">
+              <Image
+                src={cmsConfig.logoUrl}
+                alt="Logo"
+                fill
+                priority
+                sizes="(max-width: 640px) 96px, 120px"
+                className="object-contain rounded"
+                unoptimized
+              />
+            </div>
           ) : (
             <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white group-hover:scale-105 transition-transform">
               <Scissors className="w-5 h-5 sm:w-6 sm:h-6 rotate-45" />

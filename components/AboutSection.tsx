@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import { Instagram } from 'lucide-react';
 import { CmsConfig } from '@/lib/types';
 
@@ -13,17 +14,20 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ cmsConfig }) => {
         
         {/* Photo Card Centered */}
         <div className="w-full relative">
-          <div className="relative rounded-2xl overflow-hidden border border-zinc-800 light:border-zinc-300 shadow-2xl group">
-            <img
+          <div className="relative rounded-2xl overflow-hidden border border-zinc-800 light:border-zinc-300 shadow-2xl group h-[480px]">
+            <Image
               src={cmsConfig.ownerPhotoUrl}
               alt={cmsConfig.ownerName}
-              className="w-full h-[480px] object-cover group-hover:scale-105 transition-transform duration-500"
-              referrerPolicy="no-referrer"
+              fill
+              sizes="(max-width: 640px) 100vw, 480px"
+              loading="lazy"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              unoptimized
             />
             <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-85" />
 
             {/* Overlay badge with Name and Title */}
-            <div className="absolute bottom-6 left-6 right-6 p-4 rounded-xl backdrop-blur-md bg-zinc-900/80 border border-zinc-700/80 text-center">
+            <div className="absolute bottom-6 left-6 right-6 p-4 rounded-xl backdrop-blur-md bg-zinc-900/80 border border-zinc-700/80 text-center z-10">
               <h4 className="text-xl font-bold text-zinc-100">{cmsConfig.ownerName}</h4>
               <p className="text-xs text-amber-500 font-semibold uppercase tracking-wider mt-1">{cmsConfig.ownerTitle}</p>
             </div>

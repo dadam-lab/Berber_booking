@@ -1,4 +1,7 @@
+'use client';
+
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { X, Maximize2 } from 'lucide-react';
 import { GalleryItem } from '@/lib/types';
 
@@ -25,16 +28,19 @@ export const GallerySection: React.FC<GallerySectionProps> = ({ gallery }) => {
             onClick={() => setActiveModalImage(item)}
             className="group relative rounded-2xl overflow-hidden border border-zinc-800 light:border-zinc-300 bg-zinc-900 cursor-pointer shadow-lg"
           >
-            <div className="aspect-[4/3] w-full overflow-hidden">
-              <img
+            <div className="aspect-[4/3] w-full overflow-hidden relative">
+              <Image
                 src={item.imageUrl}
                 alt={item.title}
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                loading="lazy"
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                referrerPolicy="no-referrer"
+                unoptimized
               />
             </div>
             
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent opacity-0 group-hover:opacity-90 transition-opacity flex flex-col justify-end p-5">
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent opacity-0 group-hover:opacity-90 transition-opacity flex flex-col justify-end p-5 z-10">
               <span className="text-[10px] font-extrabold text-white uppercase tracking-widest mb-1">
                 {item.category}
               </span>
@@ -60,17 +66,22 @@ export const GallerySection: React.FC<GallerySectionProps> = ({ gallery }) => {
           >
             <button
               onClick={() => setActiveModalImage(null)}
-              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-zinc-950/80 text-zinc-300 hover:text-white cursor-pointer"
+              className="absolute top-4 right-4 z-20 p-2 rounded-full bg-zinc-950/80 text-zinc-300 hover:text-white cursor-pointer"
             >
               <X className="w-6 h-6" />
             </button>
 
-            <img
-              src={activeModalImage.imageUrl}
-              alt={activeModalImage.title}
-              className="w-full max-h-[75vh] object-contain bg-zinc-950"
-              referrerPolicy="no-referrer"
-            />
+            <div className="relative w-full h-[65vh] bg-zinc-950">
+              <Image
+                src={activeModalImage.imageUrl}
+                alt={activeModalImage.title}
+                fill
+                sizes="100vw"
+                loading="lazy"
+                className="object-contain"
+                unoptimized
+              />
+            </div>
 
             <div className="p-6 bg-zinc-900 flex items-center justify-between">
               <div>
