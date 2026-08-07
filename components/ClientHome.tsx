@@ -70,6 +70,8 @@ const INITIAL_CMS_CONFIG: CmsConfig = {
   dateSchedules: []
 };
 
+import { SITE_CONFIG } from '@/lib/siteConfig';
+
 interface ClientHomeProps {
   initialSettings?: Record<string, string>;
   initialServices?: Service[];
@@ -85,40 +87,8 @@ export default function ClientHome({
   initialReservations = [],
   gallerySlot,
 }: ClientHomeProps) {
-  // Merge initial settings into CmsConfig
-  const [cmsConfig, setCmsConfig] = useState<CmsConfig>(() => {
-    const s = initialSettings;
-    if (!s || Object.keys(s).length === 0) return INITIAL_CMS_CONFIG;
-    return {
-      ...INITIAL_CMS_CONFIG,
-      shopName: s.shop_name || s.barber_name || INITIAL_CMS_CONFIG.shopName,
-      tagline: s.tagline || INITIAL_CMS_CONFIG.tagline,
-      heroHeadline: s.hero_headline || INITIAL_CMS_CONFIG.heroHeadline,
-      heroSubheadline: s.hero_subheadline || INITIAL_CMS_CONFIG.heroSubheadline,
-      aboutTitle: s.about_title || INITIAL_CMS_CONFIG.aboutTitle,
-      aboutText: s.about_text || s.barber_bio || INITIAL_CMS_CONFIG.aboutText,
-      ownerName: s.owner_name || s.barber_name || INITIAL_CMS_CONFIG.ownerName,
-      ownerTitle: s.owner_title || s.barber_role || INITIAL_CMS_CONFIG.ownerTitle,
-      ownerPhotoUrl: s.owner_photo_url || s.barber_avatar || INITIAL_CMS_CONFIG.ownerPhotoUrl,
-      logoUrl: s.logo_url !== undefined ? s.logo_url : INITIAL_CMS_CONFIG.logoUrl,
-      phone: s.contact_phone || INITIAL_CMS_CONFIG.phone,
-      email: s.contact_email || INITIAL_CMS_CONFIG.email,
-      address: s.contact_address || INITIAL_CMS_CONFIG.address,
-      city: s.city || INITIAL_CMS_CONFIG.city,
-      postalCode: s.postal_code || INITIAL_CMS_CONFIG.postalCode,
-      contactDescription: s.contact_description || INITIAL_CMS_CONFIG.contactDescription,
-      googleMapsUrl: s.google_maps_url || s.google_maps_iframe || INITIAL_CMS_CONFIG.googleMapsUrl,
-      instagramUrl: s.instagram_url !== undefined ? s.instagram_url : INITIAL_CMS_CONFIG.instagramUrl,
-      personalInstagramUrl: s.personal_instagram_url !== undefined ? s.personal_instagram_url : INITIAL_CMS_CONFIG.personalInstagramUrl,
-      instagramEnabled: s.instagram_enabled !== undefined ? s.instagram_enabled === 'true' : INITIAL_CMS_CONFIG.instagramEnabled,
-      personalInstagramEnabled: s.personal_instagram_enabled !== undefined ? s.personal_instagram_enabled === 'true' : INITIAL_CMS_CONFIG.personalInstagramEnabled,
-      primaryColor: s.primary_color || INITIAL_CMS_CONFIG.primaryColor,
-      secondaryColor: s.secondary_color || INITIAL_CMS_CONFIG.secondaryColor,
-      scheduleTemplates: s.schedule_templates ? (() => {
-        try { return JSON.parse(s.schedule_templates); } catch (e) { return INITIAL_CMS_CONFIG.scheduleTemplates; }
-      })() : INITIAL_CMS_CONFIG.scheduleTemplates,
-    };
-  });
+  // Use static SITE_CONFIG directly for 0ms initial load
+  const [cmsConfig, setCmsConfig] = useState<CmsConfig>(SITE_CONFIG);
 
   const [services, setServices] = useState<Service[]>(initialServices.length > 0 ? initialServices : []);
   const [gallery, setGallery] = useState<GalleryItem[]>(initialGallery.length > 0 ? initialGallery : []);
