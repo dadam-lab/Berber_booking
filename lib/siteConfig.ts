@@ -70,3 +70,45 @@ export const SITE_CONFIG: CmsConfig = {
   blockedDays: [],
   dateSchedules: [],
 };
+
+import { Service } from '@/lib/types';
+
+export const DEFAULT_SERVICES: Service[] = [
+  {
+    id: 'srv-1',
+    name: 'Klasický střih',
+    description: 'Mytí, střih nůžkami i strojkem, úprava obočí, kontur a úprava vlasů stylingovým produktem.',
+    price: 550,
+    durationMinutes: 45,
+    active: true,
+    category: 'Střihy',
+  },
+  {
+    id: 'srv-2',
+    name: 'Úprava vousů Hot Towel',
+    description: 'Tradiční holení břitvou s napářkou horkým ručníkem, vytvarování a ošetření olejem.',
+    price: 400,
+    durationMinutes: 30,
+    active: true,
+    category: 'Vousy',
+  },
+  {
+    id: 'srv-3',
+    name: 'VIP Kompletní balíček',
+    description: 'Kombinace střihu vlasů, úpravy vousů horkým ručníkem, depilace voskem a masáže hlavy.',
+    price: 850,
+    durationMinutes: 60,
+    badge: 'Nejoblíbenější',
+    active: true,
+    category: 'Kombo',
+  },
+  {
+    id: 'srv-4',
+    name: 'Juniorský střih (do 15 let)',
+    description: 'Moderní dětský střih přizpůsobený přání zákazníka.',
+    price: 400,
+    durationMinutes: 30,
+    active: true,
+    category: 'Střihy',
+  },
+];

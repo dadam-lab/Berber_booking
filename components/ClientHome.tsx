@@ -10,13 +10,13 @@ import { ContactSection } from '@/components/ContactSection';
 import { Footer } from '@/components/Footer';
 import { AdminModal } from '@/components/AdminModal';
 
-import { SITE_CONFIG } from '@/lib/siteConfig';
+import { SITE_CONFIG, DEFAULT_SERVICES } from '@/lib/siteConfig';
 
 export default function ClientHome() {
   // Statická konfigurace — reálné texty, okamžitý render, žádné výchozí placeholdery
   const [cmsConfig, setCmsConfig] = useState<CmsConfig>(SITE_CONFIG);
 
-  const [services, setServices] = useState<Service[]>([]);
+  const [services, setServices] = useState<Service[]>(DEFAULT_SERVICES);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
 

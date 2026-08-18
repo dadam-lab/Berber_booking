@@ -49,9 +49,27 @@ export const HeroReservation: React.FC<HeroReservationProps> = ({
   } | null>(null);
 
   const [dbDateSchedules, setDbDateSchedules] = useState<DateSchedule[]>(cmsConfig.dateSchedules || []);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(true);
+  const [deviceOS, setDeviceOS] = useState<'ios' | 'android' | 'desktop'>('desktop');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const ua = window.navigator.userAgent.toLowerCase();
+      if (/iphone|ipad|ipod|macintosh/.test(ua) && ('ontouchend' in document || window.navigator.maxTouchPoints > 0)) {
+        setDeviceOS('ios');
+      } else if (/iphone|ipad|ipod/.test(ua)) {
+        setDeviceOS('ios');
+      } else if (/android/.test(ua)) {
+        setDeviceOS('android');
+      } else {
+        setDeviceOS('desktop');
+      }
+    }
+  }, []);
 
   // Fetch all configured dates & slots from Supabase DB on component mount
   const loadAvailability = () => {
+    setIsLoadingCalendar(true);
     const todayISO = new Date().toISOString().split('T')[0];
     const future60ISO = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -85,7 +103,8 @@ export const HeroReservation: React.FC<HeroReservationProps> = ({
           setDbDateSchedules(converted);
         }
       })
-      .catch((err) => console.log('Error fetching DB availability:', err));
+      .catch((err) => console.log('Error fetching DB availability:', err))
+      .finally(() => setIsLoadingCalendar(false));
   };
 
   useEffect(() => {
@@ -391,6 +410,13 @@ export const HeroReservation: React.FC<HeroReservationProps> = ({
             )}
           </div>
 
+          {isLoadingCalendar && (
+            <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-center gap-2 font-medium animate-pulse">
+              <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span>Načítám aktuální volné termíny v kalendáři...</span>
+            </div>
+          )}
+
           <CalendarHeatmap
             schedules={schedules}
             dateSchedules={dbDateSchedules}
@@ -673,21 +699,40 @@ export const HeroReservation: React.FC<HeroReservationProps> = ({
             </div>
           </div>
 
-          {/* Calendar Add Buttons */}
-          <div className="mb-8">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-white mb-3">
-              Přidat si termín do svého kalendáře
-            </h4>
+          {/* Smart Device-Optimized Calendar Prompt */}
+          <div className="mb-8 p-5 rounded-2xl bg-zinc-950/90 border border-amber-500/40 text-center space-y-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-[11px] font-extrabold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>
+                {deviceOS === 'ios'
+                  ? 'Detekován iPhone / Apple zariadení'
+                  : deviceOS === 'android'
+                  ? 'Detekováno zařízením Android'
+                  : 'Uložení termínu do kalendáře'}
+              </span>
+            </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              {/* Apple / Outlook iCal Download */}
+            <p className="text-xs text-zinc-300">
+              {deviceOS === 'ios'
+                ? 'Klepnutím níže si termín ihned uložte do vašeho Apple Kalendáře v iPhone / Mac.'
+                : deviceOS === 'android'
+                ? 'Klepnutím níže si otevřete aplikaci Google Kalendář a uložte si termín.'
+                : 'Uložte si termín do vašeho kalendáře, abyste na něj nezapomněli.'}
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              {/* Apple Calendar Button */}
               <a
                 href={confirmedData.icsUrl}
                 download="rezervace-barber.ics"
-                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-zinc-800 light:bg-zinc-200 hover:bg-zinc-700 text-white light:text-zinc-800 text-xs font-bold flex items-center justify-center gap-2 border border-zinc-700 transition-all cursor-pointer"
+                className={`w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-lg ${
+                  deviceOS === 'ios'
+                    ? 'bg-white text-zinc-950 hover:bg-zinc-200 ring-2 ring-amber-400 font-extrabold scale-[1.02]'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                }`}
               >
-                <Download className="w-4 h-4 text-white" />
-                <span>Přidat do Apple Calendar (.ics)</span>
+                <Download className="w-4 h-4" />
+                <span> Uložit do Apple Kalendáře (.ics)</span>
               </a>
 
               {/* Google Calendar Link */}
@@ -695,10 +740,16 @@ export const HeroReservation: React.FC<HeroReservationProps> = ({
                 href={confirmedData.googleCalendarUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-white/10"
+                className={`w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-lg ${
+                  deviceOS === 'android'
+                    ? 'bg-white text-zinc-950 hover:bg-zinc-200 ring-2 ring-amber-400 font-extrabold scale-[1.02]'
+                    : deviceOS === 'ios'
+                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                    : 'bg-white text-zinc-950 hover:bg-zinc-200 font-extrabold shadow-white/10'
+                }`}
               >
                 <ExternalLink className="w-4 h-4" />
-                <span>Přidat do Google Calendar</span>
+                <span>📅 Uložit do Google Kalendáře</span>
               </a>
             </div>
           </div>
