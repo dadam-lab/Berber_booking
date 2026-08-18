@@ -12,12 +12,42 @@ import { AdminModal } from '@/components/AdminModal';
 
 import { SITE_CONFIG, DEFAULT_SERVICES } from '@/lib/siteConfig';
 
-export default function ClientHome() {
+interface ClientHomeProps {
+  initialServices?: Service[];
+  initialGallery?: GalleryItem[];
+}
+
+export default function ClientHome({ initialServices, initialGallery }: ClientHomeProps = {}) {
   // Statická konfigurace — reálné texty, okamžitý render, žádné výchozí placeholdery
   const [cmsConfig, setCmsConfig] = useState<CmsConfig>(SITE_CONFIG);
 
-  const [services, setServices] = useState<Service[]>(DEFAULT_SERVICES);
-  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [services, setServices] = useState<Service[]>(() => {
+    if (initialServices && initialServices.length > 0) return initialServices;
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('barber_services');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+    }
+    return DEFAULT_SERVICES;
+  });
+
+  const [gallery, setGallery] = useState<GalleryItem[]>(() => {
+    if (initialGallery && initialGallery.length > 0) return initialGallery;
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('barber_gallery');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
   const [reservations, setReservations] = useState<Reservation[]>([]);
 
   // Admin Modal & Auth State
@@ -100,6 +130,9 @@ export default function ClientHome() {
             category: item.category || 'Střihy',
           }));
           setServices(mappedServices);
+          try {
+            localStorage.setItem('barber_services', JSON.stringify(mappedServices));
+          } catch (e) {}
         }
       }
 
@@ -113,6 +146,9 @@ export default function ClientHome() {
             category: item.category || 'Střihy',
           }));
           setGallery(mappedGallery);
+          try {
+            localStorage.setItem('barber_gallery', JSON.stringify(mappedGallery));
+          } catch (e) {}
         }
       }
 
