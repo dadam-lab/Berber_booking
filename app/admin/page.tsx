@@ -288,6 +288,31 @@ export default function AdminPage() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      showToast('Nahrávám fotku na Supabase Storage...');
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || 'Nahrávání selhalo');
+      }
+      setNewGalleryUrl(data.url);
+      if (!newGalleryCaption) {
+        setNewGalleryCaption(file.name.replace(/\.[^/.]+$/, ''));
+      }
+      showToast('Fotka byla úspěšně nahrána na Supabase!');
+    } catch (err: any) {
+      showToast(err.message || 'Chyba při nahrávání fotky.', 'error');
+    }
+  };
+
   // Gallery Add / Delete
   const handleAddGalleryItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1212,9 +1237,19 @@ export default function AdminPage() {
                   Přidat fotku do Galerie
                 </h3>
 
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">URL Obrázku (JPG/PNG) *</label>
+                    <label className="block text-xs text-slate-400 mb-1">Nahrát soubor ze zařízení</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400 cursor-pointer"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">nebo URL Obrázku *</label>
                     <input
                       type="url"
                       required

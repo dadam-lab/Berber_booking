@@ -149,6 +149,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Status Feedback & Errors
   const [statusMsg, setStatusMsg] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [testEmailRecipient, setTestEmailRecipient] = useState('');
   const [cronResult, setCronResult] = useState<any>(null);
 
@@ -295,20 +296,42 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     return days;
   };
 
-  // Helper for single image file upload validation (JPG / PNG only)
-  const processImageFile = (file: File, callback: (dataUrl: string) => void) => {
+  // Helper for single image file upload to Supabase Storage via /api/upload
+  const uploadImageFile = async (file: File, category: string, title: string) => {
     setUploadError('');
-    if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      setUploadError('Chyba: Nahrajte pouze obrázek ve formátu JPG nebo PNG.');
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Chyba: Nahrajte pouze platný obrázek (JPG, PNG, WEBP, GIF).');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        callback(e.target.result as string);
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || 'Nahrávání obrázku selhalo.');
       }
-    };
-    reader.readAsDataURL(file);
+
+      const newItem: GalleryItem = {
+        id: 'gal-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        title: title || file.name.replace(/\.[^/.]+$/, ''),
+        category: category || 'Střihy',
+        imageUrl: data.url,
+      };
+
+      setGalleryDraft((prev) => [newItem, ...prev]);
+    } catch (err: any) {
+      console.error('[uploadImageFile Error]:', err);
+      setUploadError(err.message || 'Chyba při nahrávání fotky na Supabase Storage.');
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -723,19 +746,33 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   {/* Logo & Owner Photo File Uploads */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-zinc-950 border border-zinc-800">
                     <div>
-                      <label className="block text-xs font-bold text-amber-500 mb-1">Logo Barbershopu (Nahrání souboru JPG/PNG)</label>
+                      <label className="block text-xs font-bold text-amber-500 mb-1">
+                        Logo Barbershopu (JPG / PNG)
+                        {isUploadingImage && <span className="ml-2 text-amber-400 animate-pulse text-[10px]">Nahrávám...</span>}
+                      </label>
                       <input
                         type="file"
-                        accept="image/png, image/jpeg"
-                        onChange={(e) => {
+                        accept="image/*"
+                        disabled={isUploadingImage}
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
-                          if (file) {
-                            processImageFile(file, (dataUrl) => {
-                              setCmsDraft({ ...cmsDraft, logoUrl: dataUrl });
-                            });
+                          if (!file) return;
+                          try {
+                            setIsUploadingImage(true);
+                            setUploadError('');
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                            const data = await res.json();
+                            if (!res.ok || !data.url) throw new Error(data.error || 'Nahrávání selhalo.');
+                            setCmsDraft((prev) => ({ ...prev, logoUrl: data.url }));
+                          } catch (err: any) {
+                            setUploadError(err.message);
+                          } finally {
+                            setIsUploadingImage(false);
                           }
                         }}
-                        className="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white file:text-zinc-950 hover:file:bg-zinc-200 cursor-pointer"
+                        className="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white file:text-zinc-950 hover:file:bg-zinc-200 cursor-pointer disabled:opacity-50"
                       />
                       {cmsDraft.logoUrl && (
                         <div className="mt-2 flex items-center gap-2">
@@ -743,7 +780,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setCmsDraft({ ...cmsDraft, logoUrl: '' })}
-                            className="text-[10px] text-rose-400 hover:underline"
+                            className="text-[10px] text-rose-400 hover:underline cursor-pointer"
                           >
                             Odstranit logo
                           </button>
@@ -752,19 +789,33 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-amber-500 mb-1">Fotografie Barbera (Nahrání souboru JPG/PNG)</label>
+                      <label className="block text-xs font-bold text-amber-500 mb-1">
+                        Fotografie Barbera (JPG / PNG)
+                        {isUploadingImage && <span className="ml-2 text-amber-400 animate-pulse text-[10px]">Nahrávám...</span>}
+                      </label>
                       <input
                         type="file"
-                        accept="image/png, image/jpeg"
-                        onChange={(e) => {
+                        accept="image/*"
+                        disabled={isUploadingImage}
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
-                          if (file) {
-                            processImageFile(file, (dataUrl) => {
-                              setCmsDraft({ ...cmsDraft, ownerPhotoUrl: dataUrl });
-                            });
+                          if (!file) return;
+                          try {
+                            setIsUploadingImage(true);
+                            setUploadError('');
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                            const data = await res.json();
+                            if (!res.ok || !data.url) throw new Error(data.error || 'Nahrávání selhalo.');
+                            setCmsDraft((prev) => ({ ...prev, ownerPhotoUrl: data.url }));
+                          } catch (err: any) {
+                            setUploadError(err.message);
+                          } finally {
+                            setIsUploadingImage(false);
                           }
                         }}
-                        className="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white file:text-zinc-950 hover:file:bg-zinc-200 cursor-pointer"
+                        className="w-full text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white file:text-zinc-950 hover:file:bg-zinc-200 cursor-pointer disabled:opacity-50"
                       />
                       {cmsDraft.ownerPhotoUrl && (
                         <div className="mt-2 flex items-center gap-2">
@@ -951,29 +1002,26 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-zinc-400 mb-1">Vybrat soubor (JPG / PNG)</label>
+                        <label className="block text-[10px] text-zinc-400 mb-1">
+                          Vybrat soubor (JPG, PNG, WEBP)
+                          {isUploadingImage && <span className="ml-2 text-amber-400 animate-pulse font-bold">Nahrávám na Supabase Storage...</span>}
+                        </label>
                         <input
                           type="file"
-                          accept="image/png, image/jpeg"
+                          accept="image/*"
                           multiple
-                          onChange={(e) => {
+                          disabled={isUploadingImage}
+                          onChange={async (e) => {
                             const files = Array.from(e.target.files || []) as File[];
                             if (files.length === 0) return;
 
-                            files.forEach((file: File) => {
-                              processImageFile(file, (dataUrl) => {
-                                const newItem: GalleryItem = {
-                                  id: 'gal-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-                                  title: newGalleryTitle || file.name.replace(/\.[^/.]+$/, ''),
-                                  category: newGalleryCategory,
-                                  imageUrl: dataUrl,
-                                };
-                                setGalleryDraft((prev) => [newItem, ...prev]);
-                              });
-                            });
+                            for (const file of files) {
+                              await uploadImageFile(file, newGalleryCategory, newGalleryTitle);
+                            }
                             setNewGalleryTitle('');
+                            e.target.value = '';
                           }}
-                          className="w-full text-xs text-zinc-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white file:text-zinc-950 hover:file:bg-zinc-200 cursor-pointer"
+                          className="w-full text-xs text-zinc-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white file:text-zinc-950 hover:file:bg-zinc-200 cursor-pointer disabled:opacity-50"
                         />
                       </div>
                     </div>

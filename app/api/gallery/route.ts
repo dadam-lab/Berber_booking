@@ -2,7 +2,70 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 5;
+export const revalidate = 0;
+
+// Helper: Parse caption stored as "[Category] Title"
+function parseCaption(captionRaw?: string): { category: string; title: string } {
+  if (!captionRaw) {
+    return { category: 'Střihy', title: 'Ukázka práce' };
+  }
+  const match = captionRaw.match(/^\[(.*?)\]\s*(.*)$/);
+  if (match) {
+    return {
+      category: match[1] || 'Střihy',
+      title: match[2] || 'Ukázka práce',
+    };
+  }
+  return {
+    category: 'Střihy',
+    title: captionRaw,
+  };
+}
+
+// Helper: Format title + category into single caption string for DB
+function formatCaption(title?: string, category?: string): string {
+  const cleanTitle = (title || 'Ukázka práce').trim();
+  const cleanCategory = (category || 'Střihy').trim();
+  return `[${cleanCategory}] ${cleanTitle}`;
+}
+
+// Helper: Upload base64 image to Supabase Storage if needed
+async function ensurePublicStorageUrl(rawUrl: string): Promise<string> {
+  if (!rawUrl || !rawUrl.startsWith('data:image/')) {
+    return rawUrl;
+  }
+
+  try {
+    const matches = rawUrl.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,(.+)$/);
+    if (!matches) return rawUrl;
+
+    const mimeType = matches[1];
+    const buffer = Buffer.from(matches[2], 'base64');
+    const ext = mimeType.split('/')[1] || 'jpg';
+    const fileName = `gallery_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('gallery')
+      .upload(fileName, buffer, {
+        contentType: mimeType,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('[Gallery Base64 Auto-Upload Error]:', uploadError);
+      return rawUrl;
+    }
+
+    const { data: publicUrlData } = supabaseAdmin.storage
+      .from('gallery')
+      .getPublicUrl(fileName);
+
+    return publicUrlData?.publicUrl || rawUrl;
+  } catch (err) {
+    console.error('[Gallery ensurePublicStorageUrl Exception]:', err);
+    return rawUrl;
+  }
+}
 
 // GET: Fetch gallery photos
 export async function GET() {
@@ -17,11 +80,25 @@ export async function GET() {
       return NextResponse.json({ gallery: [], error: error.message });
     }
 
+    const formattedGallery = (data || []).map((item) => {
+      const { category, title } = parseCaption(item.caption);
+      return {
+        id: item.id,
+        image_url: item.image_url,
+        imageUrl: item.image_url,
+        caption: item.caption,
+        title,
+        category,
+        order_index: item.order_index,
+        created_at: item.created_at,
+      };
+    });
+
     return NextResponse.json(
-      { gallery: data || [] },
+      { gallery: formattedGallery },
       {
         headers: {
-          'Cache-Control': 's-maxage=5, stale-while-revalidate=30',
+          'Cache-Control': 'no-store, max-age=0',
         },
       }
     );
@@ -45,11 +122,21 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, gallery: [] });
       }
 
-      const itemsToInsert = body.gallery.map((item: any, idx: number) => ({
-        image_url: item.imageUrl || item.image_url,
-        caption: item.title || item.caption || '',
-        order_index: idx + 1,
-      }));
+      const itemsToInsert = await Promise.all(
+        body.gallery.map(async (item: any, idx: number) => {
+          const rawUrl = item.imageUrl || item.image_url;
+          const publicUrl = await ensurePublicStorageUrl(rawUrl);
+          const rawTitle = item.title || item.caption || 'Ukázka práce';
+          const rawCategory = item.category || 'Střihy';
+          const captionStr = formatCaption(rawTitle, rawCategory);
+
+          return {
+            image_url: publicUrl,
+            caption: captionStr,
+            order_index: idx + 1,
+          };
+        })
+      );
 
       const { data, error } = await supabaseAdmin
         .from('gallery')
@@ -61,20 +148,37 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Chyba při ukládání galerie.' }, { status: 500 });
       }
 
-      return NextResponse.json({ success: true, gallery: data });
+      const formattedData = (data || []).map((item) => {
+        const { category, title } = parseCaption(item.caption);
+        return {
+          id: item.id,
+          image_url: item.image_url,
+          imageUrl: item.image_url,
+          caption: item.caption,
+          title,
+          category,
+          order_index: item.order_index,
+        };
+      });
+
+      return NextResponse.json({ success: true, gallery: formattedData });
     }
 
-    const { image_url, caption, order_index } = body;
+    const { image_url, imageUrl, caption, title, category, order_index } = body;
+    const rawUrl = imageUrl || image_url;
 
-    if (!image_url) {
+    if (!rawUrl) {
       return NextResponse.json({ error: 'URL obrázku je povinná.' }, { status: 400 });
     }
+
+    const publicUrl = await ensurePublicStorageUrl(rawUrl);
+    const captionStr = formatCaption(title || caption, category);
 
     const { data, error } = await supabaseAdmin
       .from('gallery')
       .insert({
-        image_url,
-        caption: caption || '',
+        image_url: publicUrl,
+        caption: captionStr,
         order_index: order_index || 0,
       })
       .select()
@@ -85,7 +189,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Chyba při ukládání obrázku.' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, item: data });
+    const parsed = parseCaption(data.caption);
+    const formattedItem = {
+      id: data.id,
+      image_url: data.image_url,
+      imageUrl: data.image_url,
+      caption: data.caption,
+      title: parsed.title,
+      category: parsed.category,
+      order_index: data.order_index,
+    };
+
+    return NextResponse.json({ success: true, item: formattedItem });
   } catch (err: any) {
     console.error('[Gallery POST Exception]:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

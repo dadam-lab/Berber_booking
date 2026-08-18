@@ -10,89 +10,15 @@ import { ContactSection } from '@/components/ContactSection';
 import { Footer } from '@/components/Footer';
 import { AdminModal } from '@/components/AdminModal';
 
-const INITIAL_CMS_CONFIG: CmsConfig = {
-  shopName: "BARBER STUDIO",
-  tagline: "Tradiční řemeslo & Moderní styl",
-  heroHeadline: "Exkluzivní péče o váš střih a vousy",
-  heroSubheadline: "rezervujte službu a vyhovující termín během 1 minuty.",
-  aboutTitle: "O mně",
-  aboutText: "",
-  aboutFeature1Title: "",
-  aboutFeature1Text: "",
-  aboutFeature2Title: "",
-  aboutFeature2Text: "",
-  aboutFeature3Title: "",
-  aboutFeature3Text: "",
-  ownerName: "Barber Studio",
-  ownerTitle: "Zakladatel a barber",
-  ownerPhotoUrl: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&q=80&w=800",
-  logoUrl: "",
-  primaryColor: "#FFFFFF",
-  secondaryColor: "#10B981",
-  fontFamily: "Outfit",
-  headingFontFamily: "Georgia",
-  address: "Vodičkova 710/28",
-  city: "Praha 1 - Nové Město",
-  postalCode: "285 71",
-  phone: "+420 777 888 999",
-  email: "kasacekdadam@gmail.com",
-  contactDescription: "Studio se nachází ve vysokém šedivém domě s nápisem \"Masáže\". Studio se nachází hned za hlavním vchodem. Zaparkovat můžete hned naproti vstupu do studia, nebo dál u autobusové zastávky.",
-  googleMapsUrl: "https://maps.google.com/?q=Vodickova+28+Praha",
-  instagramUrl: "https://instagram.com",
-  facebookUrl: "https://facebook.com",
-  personalInstagramUrl: "https://instagram.com",
-  instagramEnabled: true,
-  facebookEnabled: true,
-  personalInstagramEnabled: true,
-  smtpHost: "smtp.gmail.com",
-  smtpPort: 587,
-  smtpUser: "kasacekdadam@gmail.com",
-  smtpEmailSender: "kasacekdadam@gmail.com",
-  emailUser: "kasacekdadam@gmail.com",
-  emailAppPassword: "wxgc kyxf diyn ifeu",
-  emailNotificationsEnabled: true,
-  barberCalendarEmail: "kasacekdadam@gmail.com",
-  googleCalendarId: "kasacekdadam@gmail.com",
-  googleServiceAccountEmail: "",
-  googlePrivateKey: "",
-  googleCalendarSyncEnabled: true,
-  barberCalendarIcalUrl: "",
-  schedules: [
-    { dayOfWeek: 1, dayName: 'Pondělí', isOpen: true, openTime: '09:00', closeTime: '19:00' },
-    { dayOfWeek: 2, dayName: 'Úterý', isOpen: true, openTime: '09:00', closeTime: '19:00' },
-    { dayOfWeek: 3, dayName: 'Středa', isOpen: true, openTime: '09:00', closeTime: '19:00' },
-    { dayOfWeek: 4, dayName: 'Čtvrtek', isOpen: true, openTime: '09:00', closeTime: '20:00' },
-    { dayOfWeek: 5, dayName: 'Pátek', isOpen: true, openTime: '09:00', closeTime: '20:00' },
-    { dayOfWeek: 6, dayName: 'Sobota', isOpen: true, openTime: '10:00', closeTime: '17:00' },
-    { dayOfWeek: 0, dayName: 'Neděle', isOpen: false, openTime: '10:00', closeTime: '15:00' },
-  ],
-  blockedDays: [],
-  dateSchedules: []
-};
-
 import { SITE_CONFIG } from '@/lib/siteConfig';
 
-interface ClientHomeProps {
-  initialSettings?: Record<string, string>;
-  initialServices?: Service[];
-  initialGallery?: GalleryItem[];
-  initialReservations?: Reservation[];
-  gallerySlot?: React.ReactNode;
-}
-
-export default function ClientHome({
-  initialSettings = {},
-  initialServices = [],
-  initialGallery = [],
-  initialReservations = [],
-  gallerySlot,
-}: ClientHomeProps) {
-  // Use static SITE_CONFIG directly for 0ms initial load
+export default function ClientHome() {
+  // Statická konfigurace — reálné texty, okamžitý render, žádné výchozí placeholdery
   const [cmsConfig, setCmsConfig] = useState<CmsConfig>(SITE_CONFIG);
 
-  const [services, setServices] = useState<Service[]>(initialServices.length > 0 ? initialServices : []);
-  const [gallery, setGallery] = useState<GalleryItem[]>(initialGallery.length > 0 ? initialGallery : []);
-  const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
+  const [services, setServices] = useState<Service[]>([]);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
 
   // Admin Modal & Auth State
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -111,6 +37,11 @@ export default function ClientHome({
       root.style.setProperty('--secondary-color', cmsConfig.secondaryColor);
     }
   }, [cmsConfig]);
+
+  // Načíst služby, galerii a rezervace z API ihned po mountu
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // Background refresh data to stay updated
   const loadData = async () => {
@@ -174,11 +105,11 @@ export default function ClientHome({
 
       if (resGallery.ok) {
         const dataGal = await resGallery.json();
-        if (dataGal.gallery && dataGal.gallery.length > 0) {
+        if (Array.isArray(dataGal.gallery)) {
           const mappedGallery: GalleryItem[] = dataGal.gallery.map((item: any) => ({
             id: item.id,
-            imageUrl: item.image_url,
-            title: item.caption || 'Ukázka práce',
+            imageUrl: item.imageUrl || item.image_url,
+            title: item.title || item.caption || 'Ukázka práce',
             category: item.category || 'Střihy',
           }));
           setGallery(mappedGallery);
@@ -330,12 +261,23 @@ export default function ClientHome({
 
   const handleSaveGallery = async (newGallery: GalleryItem[]) => {
     try {
-      await fetch('/api/gallery', {
+      const res = await fetch('/api/gallery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ gallery: newGallery }),
       });
-      setGallery(newGallery);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.gallery)) {
+        const mapped: GalleryItem[] = data.gallery.map((item: any) => ({
+          id: item.id,
+          imageUrl: item.imageUrl || item.image_url,
+          title: item.title || item.caption || 'Ukázka práce',
+          category: item.category || 'Střihy',
+        }));
+        setGallery(mapped);
+      } else {
+        setGallery(newGallery);
+      }
     } catch (err) {
       setGallery(newGallery);
     }
@@ -390,7 +332,7 @@ export default function ClientHome({
         />
 
         <AboutSection cmsConfig={cmsConfig} />
-        {gallerySlot || <GallerySection gallery={gallery} />}
+        <GallerySection gallery={gallery} />
         <ContactSection cmsConfig={cmsConfig} />
       </main>
 

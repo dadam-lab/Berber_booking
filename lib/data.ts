@@ -48,12 +48,23 @@ export async function getGallery(): Promise<GalleryItem[]> {
 
     if (error || !dbGallery) return [];
 
-    return dbGallery.map((item: any) => ({
-      id: item.id,
-      imageUrl: item.image_url,
-      title: item.caption || 'Ukázka práce',
-      category: item.category || 'Střihy',
-    }));
+    return dbGallery.map((item: any) => {
+      let title = item.caption || 'Ukázka práce';
+      let category = item.category || 'Střihy';
+      if (item.caption) {
+        const match = item.caption.match(/^\[(.*?)\]\s*(.*)$/);
+        if (match) {
+          category = match[1] || 'Střihy';
+          title = match[2] || 'Ukázka práce';
+        }
+      }
+      return {
+        id: item.id,
+        imageUrl: item.image_url,
+        title,
+        category,
+      };
+    });
   } catch (err) {
     console.error('[getGallery Error]:', err);
     return [];
