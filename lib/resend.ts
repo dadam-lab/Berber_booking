@@ -23,13 +23,15 @@ export function getTransporter() {
 }
 
 function getBaseUrl() {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
+  const customUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (customUrl && customUrl.trim()) {
+    let url = customUrl.trim().replace(/\/$/, '');
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`;
+    }
+    return url;
   }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.replace(/\/$/, '')}`;
-  }
-  return 'http://localhost:3000';
+  return 'https://swbarbershop.cz';
 }
 
 /**
