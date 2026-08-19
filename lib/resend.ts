@@ -119,7 +119,7 @@ export async function sendBookingEmails(booking: {
           ` : ''}
           <tr>
             <td colspan="2" style="padding: 14px 16px; background-color: #18181b; text-align: center; font-size: 14px; color: #a1a1aa;">
-              Pokud chcete schůzku zrušit, <a href="${cancelUrl}" style="color: #ffffff; font-weight: bold; text-decoration: underline;">klikněte ZDE</a>.
+              Pokud chcete schůzku zrušit, můžete <a href="${cancelUrl}" style="color: #ffffff; font-weight: bold; text-decoration: underline;">zrušit rezervaci online</a>.
             </td>
           </tr>
         </tbody>
@@ -154,6 +154,19 @@ export async function sendBookingEmails(booking: {
       </div>
     </div>
   `;
+
+  const clientText = `Ahoj ${booking.clientName},
+
+Tvoje rezervace v SW-Barber byla úspěšně potvrzena.
+
+Služba: ${booking.serviceTitle} (${booking.servicePrice} Kč)
+Termín: ${formattedDate} v ${booking.time}
+${booking.note ? `Poznámka: ${booking.note}\n` : ''}Adresa: ${address}
+
+Pro případné zrušení termínu navštivte: ${cancelUrl}
+
+Těšíme se na vás!
+SW-Barber`;
 
   // 2. Barber Notification HTML Email
   const barberHtml = `
@@ -196,6 +209,13 @@ export async function sendBookingEmails(booking: {
     </div>
   `;
 
+  const barberText = `Nová rezervace přes systém SW-Barber:
+
+Klient: ${booking.clientName} (${booking.clientEmail})
+Služba: ${booking.serviceTitle} (${booking.servicePrice} Kč)
+Termín: ${booking.date} v ${booking.time}
+${booking.note ? `Poznámka: ${booking.note}\n` : ''}`;
+
   const mailer = getTransporter();
   let clientRes = null;
   let barberRes = null;
@@ -209,6 +229,7 @@ export async function sendBookingEmails(booking: {
       replyTo: emailUser,
       to: booking.clientEmail,
       subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle}`,
+      text: clientText,
       html: clientHtml,
       attachments: [
         {
@@ -231,6 +252,7 @@ export async function sendBookingEmails(booking: {
       replyTo: booking.clientEmail,
       to: barberEmail,
       subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
+      text: barberText,
       html: barberHtml,
     });
     console.log(`[Nodemailer Success] Barber email sent to ${barberEmail}:`, barberRes.messageId);
