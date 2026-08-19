@@ -196,35 +196,56 @@ export async function sendBookingEmails(booking: {
     </div>
   `;
 
-  try {
-    const mailer = getTransporter();
-    const [clientRes, barberRes] = await Promise.all([
-      mailer.sendMail({
-        from: `"SW-Barber" <${emailUser}>`,
-        to: booking.clientEmail,
-        subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle}`,
-        html: clientHtml,
-        attachments: [
-          {
-            filename: 'rezervace.ics',
-            content: icsContent,
-            contentType: 'text/calendar; method=REQUEST; charset=UTF-8',
-          },
-        ],
-      }),
-      mailer.sendMail({
-        from: `"SW-Barber" <${emailUser}>`,
-        to: barberEmail,
-        subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
-        html: barberHtml,
-      }),
-    ]);
+  const mailer = getTransporter();
+  let clientRes = null;
+  let barberRes = null;
+  let clientError = null;
+  let barberError = null;
 
-    return { success: true, clientRes, barberRes };
-  } catch (error) {
-    console.error('[Nodemailer Error] Failed to send emails:', error);
-    return { success: false, error };
+  // 1. Send Client Confirmation Email
+  try {
+    clientRes = await mailer.sendMail({
+      from: `"SW-Barber" <${emailUser}>`,
+      replyTo: emailUser,
+      to: booking.clientEmail,
+      subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle}`,
+      html: clientHtml,
+      attachments: [
+        {
+          filename: 'rezervace.ics',
+          content: icsContent,
+          contentType: 'text/calendar; charset=UTF-8',
+        },
+      ],
+    });
+    console.log(`[Nodemailer Success] Client email sent to ${booking.clientEmail}:`, clientRes.messageId);
+  } catch (err: any) {
+    console.error(`[Nodemailer Error] Failed sending client email to ${booking.clientEmail}:`, err);
+    clientError = err?.message || String(err);
   }
+
+  // 2. Send Barber Notification Email
+  try {
+    barberRes = await mailer.sendMail({
+      from: `"SW-Barber" <${emailUser}>`,
+      replyTo: booking.clientEmail,
+      to: barberEmail,
+      subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
+      html: barberHtml,
+    });
+    console.log(`[Nodemailer Success] Barber email sent to ${barberEmail}:`, barberRes.messageId);
+  } catch (err: any) {
+    console.error(`[Nodemailer Error] Failed sending barber email to ${barberEmail}:`, err);
+    barberError = err?.message || String(err);
+  }
+
+  return {
+    success: !clientError && !barberError,
+    clientRes,
+    barberRes,
+    clientError,
+    barberError,
+  };
 }
 
 /**
