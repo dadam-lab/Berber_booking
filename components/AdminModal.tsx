@@ -1838,7 +1838,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               })
                             }
                             className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 font-mono"
-                            placeholder="kasacekdadam@gmail.com"
+                            placeholder="rezervace.swbarbershop@gmail.com"
                           />
                         </div>
                         <div>
@@ -1896,7 +1896,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             })
                           }
                           className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 font-mono"
-                          placeholder="kasacekdadam@gmail.com nebo ID kalendáře"
+                          placeholder="rezervace.swbarbershop@gmail.com nebo ID kalendáře"
                         />
                       </div>
 

@@ -17,7 +17,7 @@ export async function createGoogleCalendarEvent(booking: {
   try {
     const settings = await getSettingsMap();
 
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || settings['google_calendar_id'];
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || settings['google_calendar_id'] || 'primary';
     const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || settings['google_service_account_email'];
     let privateKey = process.env.GOOGLE_PRIVATE_KEY || settings['google_private_key'];
 
@@ -26,7 +26,11 @@ export async function createGoogleCalendarEvent(booking: {
       return null;
     }
 
-    // Fix escaped line breaks if private key is passed in single-line format
+    // Fix quotes and escaped line breaks if private key is passed in single-line or wrapped format
+    privateKey = privateKey.trim();
+    if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+      privateKey = privateKey.slice(1, -1);
+    }
     privateKey = privateKey.replace(/\\n/g, '\n');
 
     const auth = new google.auth.JWT({

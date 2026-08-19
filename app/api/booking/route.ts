@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendBookingEmails } from '@/lib/resend';
 import { createGoogleCalendarEvent } from '@/lib/google-calendar';
-import { waitUntil } from '@vercel/functions';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,8 +111,8 @@ export async function POST(request: Request) {
         }, { onConflict: 'date,time' });
     }
 
-    // 6. Send Booking Emails & GCal sync in background via Vercel waitUntil
-    waitUntil(
+    // 6. Send Booking Emails & Sync event to Barber Google Calendar (awaiting to ensure completion on Vercel Serverless)
+    const [emailResult, calResult] = await Promise.allSettled([
       sendBookingEmails({
         orderId: newOrder.id,
         clientName: client_name,
@@ -123,11 +122,7 @@ export async function POST(request: Request) {
         servicePrice: service.price,
         date,
         time,
-      }).catch((emailErr) => console.error('[Booking Email Error]:', emailErr))
-    );
-
-    // 7. Sync event to Barber Google Calendar via Service Account API (Async)
-    waitUntil(
+      }),
       createGoogleCalendarEvent({
         summary: service.title,
         description: note ? `Poznámka: ${note}` : 'Bez poznámky',
@@ -136,14 +131,26 @@ export async function POST(request: Request) {
         durationMinutes: service.duration_minutes || 30,
         clientEmail: client_email,
         clientName: client_name,
-      }).catch((err) => console.error('Google Calendar sync background error:', err))
-    );
+      }),
+    ]);
+
+    if (emailResult.status === 'rejected') {
+      console.error('[Booking Email Error]:', emailResult.reason);
+    } else if (emailResult.value && !emailResult.value.success) {
+      console.warn('[Booking Email Warning]:', emailResult.value);
+    }
+
+    if (calResult.status === 'rejected') {
+      console.error('[Google Calendar Error]:', calResult.reason);
+    }
 
     return NextResponse.json({
       success: true,
       message: 'Rezervace byla úspěšně vytvořena.',
       order: newOrder,
       service,
+      emailStatus: emailResult.status === 'fulfilled' ? emailResult.value : 'error',
+      calendarStatus: calResult.status === 'fulfilled' ? (calResult.value ? 'created' : 'failed') : 'error',
     });
   } catch (error: any) {
     console.error('[API Booking Error]:', error);
