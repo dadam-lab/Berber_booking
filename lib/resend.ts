@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { getSettingsMap } from './supabase';
 import { getGoogleCalendarUrl, getAppleCalendarUrl, generateICSContent } from './ics';
 
@@ -216,6 +217,59 @@ Služba: ${booking.serviceTitle} (${booking.servicePrice} Kč)
 Termín: ${booking.date} v ${booking.time}
 ${booking.note ? `Poznámka: ${booking.note}\n` : ''}`;
 
+  const resendApiKey = process.env.RESEND_API_KEY || settings['resend_api_key'];
+  const senderAddress = process.env.SENDER_EMAIL || settings['sender_email'] || emailUser;
+
+  // Option A: Send via Resend API if RESEND_API_KEY is configured
+  if (resendApiKey) {
+    console.log('[Email Service] Using Resend API for email delivery...');
+    const resend = new Resend(resendApiKey);
+
+    let clientRes = null;
+    let barberRes = null;
+    let clientError = null;
+    let barberError = null;
+
+    try {
+      clientRes = await resend.emails.send({
+        from: `SW-Barber <${senderAddress}>`,
+        reply_to: senderAddress,
+        to: booking.clientEmail,
+        subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle}`,
+        text: clientText,
+        html: clientHtml,
+        attachments: [
+          {
+            filename: 'rezervace.ics',
+            content: Buffer.from(icsContent).toString('base64'),
+          },
+        ],
+      });
+      console.log(`[Resend API Success] Client email sent to ${booking.clientEmail}:`, clientRes);
+    } catch (err: any) {
+      console.error(`[Resend API Error] Failed sending client email:`, err);
+      clientError = err?.message || String(err);
+    }
+
+    try {
+      barberRes = await resend.emails.send({
+        from: `SW-Barber <${senderAddress}>`,
+        reply_to: booking.clientEmail,
+        to: barberEmail,
+        subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
+        text: barberText,
+        html: barberHtml,
+      });
+      console.log(`[Resend API Success] Barber email sent to ${barberEmail}:`, barberRes);
+    } catch (err: any) {
+      console.error(`[Resend API Error] Failed sending barber email:`, err);
+      barberError = err?.message || String(err);
+    }
+
+    return { success: !clientError && !barberError, clientRes, barberRes, clientError, barberError };
+  }
+
+  // Option B: Fallback to Nodemailer Gmail SMTP
   const mailer = getTransporter();
   let clientRes = null;
   let barberRes = null;
