@@ -83,12 +83,14 @@ export async function POST(request: Request) {
       console.error('[Cancel Booking Error] Availability update failed:', availError);
     }
 
-    // 4. Smazat událost z Google Kalendáře, pokud existuje ID
-    if (order.gcal_event_id) {
-      deleteGoogleCalendarEvent(order.gcal_event_id).catch((gcalErr) =>
-        console.error('[Cancel Booking GCal Delete Error]:', gcalErr)
-      );
-    }
+    // 4. Smazat událost z Google Kalendáře (zkusí ID nebo vyhledání podle dne/klienta)
+    deleteGoogleCalendarEvent({
+      gcalEventId: order.gcal_event_id,
+      date: order.date,
+      time: order.time,
+      clientEmail: order.client_email,
+      clientName: order.client_name,
+    }).catch((gcalErr) => console.error('[Cancel Booking GCal Delete Error]:', gcalErr));
 
     // 5. Odeslat storno e-mail klientovi a barberovi (awaiting to ensure delivery)
     try {

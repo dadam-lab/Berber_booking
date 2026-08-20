@@ -63,11 +63,13 @@ export async function PUT(request: Request) {
         .eq('date', order.date)
         .eq('time', order.time);
 
-      if (order.gcal_event_id) {
-        deleteGoogleCalendarEvent(order.gcal_event_id).catch((gcalErr) =>
-          console.error('[Orders PUT GCal Delete Error]:', gcalErr)
-        );
-      }
+      deleteGoogleCalendarEvent({
+        gcalEventId: order.gcal_event_id,
+        date: order.date,
+        time: order.time,
+        clientEmail: order.client_email,
+        clientName: order.client_name,
+      }).catch((gcalErr) => console.error('[Orders PUT GCal Delete Error]:', gcalErr));
 
       // Send cancellation email
       sendCancellationEmail({

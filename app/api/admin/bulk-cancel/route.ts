@@ -46,12 +46,14 @@ export async function POST(request: Request) {
           .update({ status: 'cancelled' })
           .eq('id', order.id);
 
-        // Delete Google Calendar event if ID exists
-        if (order.gcal_event_id) {
-          deleteGoogleCalendarEvent(order.gcal_event_id).catch((err) =>
-            console.error(`[Bulk Cancel GCal Delete Error for ${order.id}]:`, err)
-          );
-        }
+        // Delete Google Calendar event (try ID or search fallback)
+        deleteGoogleCalendarEvent({
+          gcalEventId: order.gcal_event_id,
+          date: order.date,
+          time: order.time,
+          clientEmail: order.client_email,
+          clientName: order.client_name,
+        }).catch((err) => console.error(`[Bulk Cancel GCal Delete Error for ${order.id}]:`, err));
 
         // Send cancellation email to client and barber with custom reason
         sendCancellationEmail({

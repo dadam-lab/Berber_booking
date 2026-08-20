@@ -77,19 +77,38 @@ export async function createGoogleCalendarEvent(booking: {
 }
 
 /**
- * Deletes an event from the Barber's Google Calendar using its Event ID.
+ * Deletes an event from the Barber's Google Calendar using its Event ID or by searching date/client details.
  */
-export async function deleteGoogleCalendarEvent(gcalEventId: string) {
-  if (!gcalEventId) return false;
+export async function deleteGoogleCalendarEvent(
+  target:
+    | string
+    | {
+        gcalEventId?: string;
+        date?: string;
+        time?: string;
+        clientEmail?: string;
+        clientName?: string;
+      }
+) {
+  const gcalEventId = typeof target === 'string' ? target : target?.gcalEventId;
+  const date = typeof target === 'object' ? target?.date : undefined;
+  const time = typeof target === 'object' ? target?.time : undefined;
+  const clientEmail = typeof target === 'object' ? target?.clientEmail : undefined;
+  const clientName = typeof target === 'object' ? target?.clientName : undefined;
+
+  if (!gcalEventId && !date) {
+    console.warn('[Google Calendar Warning] Neither eventId nor date provided for deletion.');
+    return false;
+  }
 
   try {
     const settings = await getSettingsMap();
 
     const calendarId = process.env.GOOGLE_CALENDAR_ID || settings['google_calendar_id'] || 'primary';
-    const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || settings['google_service_account_email'];
+    const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || settings['google_service_account_email'];
     let privateKey = process.env.GOOGLE_PRIVATE_KEY || settings['google_private_key'];
 
-    if (!calendarId || !clientEmail || !privateKey) {
+    if (!calendarId || !serviceAccountEmail || !privateKey) {
       console.warn('[Google Calendar Warning] Service account credentials missing. Cannot delete event.');
       return false;
     }
@@ -101,20 +120,71 @@ export async function deleteGoogleCalendarEvent(gcalEventId: string) {
     privateKey = privateKey.replace(/\\n/g, '\n');
 
     const auth = new google.auth.JWT({
-      email: clientEmail,
+      email: serviceAccountEmail,
       key: privateKey,
       scopes: ['https://www.googleapis.com/auth/calendar.events'],
     });
 
     const calendar = google.calendar({ version: 'v3', auth });
 
-    await calendar.events.delete({
-      calendarId,
-      eventId: gcalEventId,
-    });
+    // Method 1: Delete by exact eventId if available
+    if (gcalEventId) {
+      try {
+        await calendar.events.delete({
+          calendarId,
+          eventId: gcalEventId,
+        });
+        console.log('[Google Calendar Success] Event deleted by ID:', gcalEventId);
+        return true;
+      } catch (err: any) {
+        console.warn('[Google Calendar Warning] Direct delete by ID failed, trying search fallback:', err?.message || err);
+      }
+    }
 
-    console.log('[Google Calendar Success] Event deleted:', gcalEventId);
-    return true;
+    // Method 2: Search for event on that date and delete matching event
+    if (date) {
+      const timeMin = new Date(`${date}T00:00:00Z`).toISOString();
+      const timeMax = new Date(`${date}T23:59:59Z`).toISOString();
+
+      const listRes = await calendar.events.list({
+        calendarId,
+        timeMin,
+        timeMax,
+        singleEvents: true,
+      });
+
+      const events = listRes.data.items || [];
+      console.log(`[Google Calendar Search] Found ${events.length} events on ${date}`);
+
+      for (const event of events) {
+        if (!event.id) continue;
+        let isMatch = false;
+
+        if (clientName && (event.summary?.includes(clientName) || event.description?.includes(clientName))) {
+          isMatch = true;
+        }
+        if (clientEmail && (event.description?.includes(clientEmail) || event.summary?.includes(clientEmail))) {
+          isMatch = true;
+        }
+        if (time && event.start?.dateTime) {
+          const eventTime = new Date(event.start.dateTime).toTimeString().substring(0, 5);
+          if (eventTime === time.substring(0, 5)) {
+            isMatch = true;
+          }
+        }
+
+        if (isMatch || events.length === 1) {
+          await calendar.events.delete({
+            calendarId,
+            eventId: event.id,
+          });
+          console.log('[Google Calendar Success] Event deleted via search fallback:', event.id, event.summary);
+          return true;
+        }
+      }
+    }
+
+    return false;
   } catch (error: any) {
     console.error('[Google Calendar Error] Failed to delete event:', error?.message || error);
     return false;

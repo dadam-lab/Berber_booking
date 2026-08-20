@@ -14,7 +14,7 @@ interface AdminModalProps {
   onSaveCms: (updatedConfig: Partial<CmsConfig>, newPass?: string) => Promise<void>;
   onSaveServices: (services: Service[]) => Promise<void>;
   onSaveGallery: (gallery: GalleryItem[]) => Promise<void>;
-  onUpdateReservationStatus: (id: string, status: 'confirmed' | 'cancelled' | 'completed') => Promise<void>;
+  onUpdateReservationStatus: (id: string, status: 'confirmed' | 'cancelled' | 'completed', reason?: string) => Promise<void>;
   onDeleteReservation: (id: string) => Promise<void>;
   onRefreshData: () => void;
 }
@@ -42,8 +42,15 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Active Tab: 'reservations' | 'cms' | 'gallery' | 'vacation' | 'services' | 'schedules' | 'email_calendar' | 'cron'
-  const [activeTab, setActiveTab] = useState<'reservations' | 'cms' | 'gallery' | 'vacation' | 'services' | 'schedules' | 'email_calendar' | 'cron'>('reservations');
+  // Active Tab: 'reservations' | 'cms' | 'gallery' | 'vacation' | 'services' | 'schedules' | 'email_calendar' | 'cron' | 'bulk_cancel'
+  const [activeTab, setActiveTab] = useState<'reservations' | 'cms' | 'gallery' | 'vacation' | 'services' | 'schedules' | 'email_calendar' | 'cron' | 'bulk_cancel'>('reservations');
+
+  // Bulk Cancel State
+  const [bulkCancelTargetDates, setBulkCancelTargetDates] = useState<string[]>([]);
+  const [bulkCancelSelectedSlots, setBulkCancelSelectedSlots] = useState<Set<string>>(new Set());
+  const [bulkCancelReason, setBulkCancelReason] = useState<string>('');
+  const [bulkCancelAllDay, setBulkCancelAllDay] = useState<boolean>(false);
+  const [isExecBulkCancel, setIsExecBulkCancel] = useState<boolean>(false);
 
   // Draft CMS State
   const [cmsDraft, setCmsDraft] = useState<CmsConfig>({ ...cmsConfig });
@@ -532,6 +539,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               </button>
 
               <button
+                onClick={() => setActiveTab('bulk_cancel')}
+                className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'bulk_cancel'
+                    ? 'bg-rose-600 text-white shadow-md font-extrabold'
+                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900'
+                }`}
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span>Storno termínů & Důvod</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('schedules')}
                 className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
                   activeTab === 'schedules'
@@ -665,7 +684,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                   )}
                                   {resItem.status !== 'cancelled' && (
                                     <button
-                                      onClick={() => onUpdateReservationStatus(resItem.id, 'cancelled')}
+                                      onClick={() => {
+                                        const reasonPrompt = prompt('Zadejte důvod zrušení rezervace pro klienta (volitelné):', '');
+                                        if (reasonPrompt === null) return;
+                                        onUpdateReservationStatus(resItem.id, 'cancelled', reasonPrompt);
+                                      }}
                                       className="px-2 py-1 rounded bg-rose-950 text-rose-300 hover:bg-rose-900 text-[10px]"
                                     >
                                       Zrušit
@@ -1239,6 +1262,216 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   >
                     Uložit nastavení dovolené
                   </button>
+                </div>
+              )}
+
+              {/* TAB: BULK CANCELLATION & REASON */}
+              {activeTab === 'bulk_cancel' && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-base font-bold text-zinc-100 mb-1 flex items-center gap-2">
+                      <Trash2 className="w-5 h-5 text-rose-500" />
+                      <span>Storno Termínů pro Klienty (s udáním důvodu)</span>
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Zde můžete stornovat termíny pro vybrané dny a časové sloty. Klientům se odesle e-mail s udaným důvodem zrušení a tlačítkem pro výběr nového termínu. Zároveň se události automaticky smažou z vášho Google Kalendáře.
+                    </p>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {/* Left: Day Selector */}
+                    <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-4">
+                      <label className="block text-xs font-bold text-amber-500 uppercase tracking-wider">
+                        1. Vyberte dny ke stornování
+                      </label>
+                      <p className="text-[11px] text-zinc-400">
+                        Klikáním na dny níže vyberte dny k rušení (můžete zvolit i více dnů najednou).
+                      </p>
+
+                      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-zinc-500 uppercase">
+                        <span>Po</span><span>Út</span><span>St</span><span>Čt</span><span>Pá</span><span>So</span><span>Ne</span>
+                      </div>
+
+                      <div className="grid grid-cols-7 gap-1">
+                        {(() => {
+                          const year = vacationCalDate.getFullYear();
+                          const month = vacationCalDate.getMonth();
+                          const firstDay = (new Date(year, month, 1).getDay() + 6) % 7;
+                          const totalDays = new Date(year, month + 1, 0).getDate();
+                          const elements = [];
+
+                          for (let i = 0; i < firstDay; i++) {
+                            elements.push(<div key={`bempty-${i}`} className="h-8" />);
+                          }
+
+                          for (let d = 1; d <= totalDays; d++) {
+                            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                            const isSelected = bulkCancelTargetDates.includes(dateStr);
+                            const dayOrdersCount = reservations.filter(
+                              (r) => r.date === dateStr && r.status !== 'cancelled'
+                            ).length;
+
+                            elements.push(
+                              <button
+                                key={`bday-${dateStr}`}
+                                type="button"
+                                onClick={() => {
+                                  setBulkCancelTargetDates((prev) =>
+                                    prev.includes(dateStr)
+                                      ? prev.filter((x) => x !== dateStr)
+                                      : [...prev, dateStr]
+                                  );
+                                }}
+                                className={`h-9 rounded-lg border text-xs font-bold transition-all relative flex flex-col items-center justify-center ${
+                                  isSelected
+                                    ? 'bg-rose-900 border-rose-500 text-white ring-2 ring-rose-500'
+                                    : dayOrdersCount > 0
+                                    ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+                                }`}
+                              >
+                                <span>{d}</span>
+                                {dayOrdersCount > 0 && (
+                                  <span className="text-[7px] bg-rose-600 text-white px-1 rounded-full">
+                                    {dayOrdersCount} obj
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          }
+                          return elements;
+                        })()}
+                      </div>
+
+                      {bulkCancelTargetDates.length > 0 && (
+                        <div className="flex justify-between items-center pt-2 text-xs border-t border-zinc-800">
+                          <span className="text-zinc-300">Vybráno dnů: <strong>{bulkCancelTargetDates.length}</strong></span>
+                          <button
+                            type="button"
+                            onClick={() => setBulkCancelTargetDates([])}
+                            className="text-rose-400 hover:underline"
+                          >
+                            Vymazat výběr dnů
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Slot & Reason Form */}
+                    <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-4">
+                      <label className="block text-xs font-bold text-amber-500 uppercase tracking-wider">
+                        2. Časy & Důvod zrušení
+                      </label>
+
+                      {/* Reason Input Field */}
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-zinc-200">
+                          Důvod zrušení (bude odeslán klientům v e-mailu):
+                        </label>
+                        <textarea
+                          value={bulkCancelReason}
+                          onChange={(e) => setBulkCancelReason(e.target.value)}
+                          placeholder="Např.: Z osobně-zdravotních důvodů ruším dnešní termíny. Prosím přeobjednejte se na jiný termín."
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-rose-500 min-h-[70px]"
+                        />
+                      </div>
+
+                      {/* All Day Checkbox */}
+                      <label className="flex items-center gap-2 text-xs font-bold text-rose-400 cursor-pointer pt-1">
+                        <input
+                          type="checkbox"
+                          checked={bulkCancelAllDay}
+                          onChange={(e) => setBulkCancelAllDay(e.target.checked)}
+                          className="rounded border-zinc-700 bg-zinc-900 text-rose-600 focus:ring-rose-500"
+                        />
+                        Zrušit VŠECHNY termíny v těchto dnů
+                      </label>
+
+                      {/* Time Slots Grid */}
+                      {!bulkCancelAllDay && (
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold text-zinc-400">Nebo vyberte konkrétní sloty ke zrušení:</span>
+                          <div className="grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                            {allTimeSlots.map((t) => {
+                              const isSel = bulkCancelSelectedSlots.has(t);
+                              return (
+                                <button
+                                  key={`bcs-${t}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setBulkCancelSelectedSlots((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(t)) next.delete(t);
+                                      else next.add(t);
+                                      return next;
+                                    });
+                                  }}
+                                  className={`py-1 rounded-lg text-xs font-medium border transition-all ${
+                                    isSel
+                                      ? 'bg-rose-600 border-rose-500 text-white font-bold'
+                                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  {t}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Execute Button */}
+                      <button
+                        type="button"
+                        disabled={isExecBulkCancel}
+                        onClick={async () => {
+                          const datesToCancel = bulkCancelTargetDates.length > 0 ? bulkCancelTargetDates : [new Date().toISOString().split('T')[0]];
+                          if (!bulkCancelAllDay && bulkCancelSelectedSlots.size === 0) {
+                            alert('Vyberte časové sloty k rušení nebo zaškrtněte zrušení celého dne.');
+                            return;
+                          }
+                          const confirmMsg = bulkCancelAllDay
+                            ? `Opravdu chcete ZRUŠIT VŠECHNY rezervace v ${datesToCancel.length} vybraných dnech?`
+                            : `Opravdu chcete zrušit ${bulkCancelSelectedSlots.size} vybraných slotů pro ${datesToCancel.length} dnů?`;
+
+                          if (!confirm(confirmMsg)) return;
+
+                          setIsExecBulkCancel(true);
+                          try {
+                            const res = await fetch('/api/admin/bulk-cancel', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                targetDates: datesToCancel,
+                                timeSlots: Array.from(bulkCancelSelectedSlots),
+                                cancelAllInSlots: bulkCancelAllDay,
+                                reason: bulkCancelReason,
+                              }),
+                            });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.error || 'Chyba při rušení termínů.');
+
+                            alert(data.message || 'Termíny byly stornovány, smazány z GCal a klienti obdrželi e-mail.');
+                            setBulkCancelSelectedSlots(new Set());
+                            setBulkCancelTargetDates([]);
+                            setBulkCancelReason('');
+                            setBulkCancelAllDay(false);
+                            onRefreshData();
+                          } catch (err: any) {
+                            alert(err.message || 'Chyba při rušení termínů.');
+                          } finally {
+                            setIsExecBulkCancel(false);
+                          }
+                        }}
+                        className="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {isExecBulkCancel
+                          ? 'Ruším termíny a mažu z Google Kalendáře...'
+                          : 'Stornovat termíny, smazat z GCal & notifikovat klienty'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -319,12 +319,12 @@ export default function ClientHome({ initialServices, initialGallery }: ClientHo
     }
   };
 
-  const handleUpdateReservationStatus = async (id: string, status: 'confirmed' | 'cancelled' | 'completed') => {
+  const handleUpdateReservationStatus = async (id: string, status: 'confirmed' | 'cancelled' | 'completed', reason?: string) => {
     try {
       await fetch('/api/orders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ id, status, reason }),
       });
       setReservations((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status } : r))
