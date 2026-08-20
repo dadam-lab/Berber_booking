@@ -68,10 +68,55 @@ export async function createGoogleCalendarEvent(booking: {
       },
     });
 
-    console.log('[Google Calendar Success] Event created:', response.data.htmlLink);
+    console.log('[Google Calendar Success] Event created:', response.data.htmlLink, 'Event ID:', response.data.id);
     return response.data;
   } catch (error) {
     console.error('[Google Calendar Error] Failed to create event:', error);
     return null;
+  }
+}
+
+/**
+ * Deletes an event from the Barber's Google Calendar using its Event ID.
+ */
+export async function deleteGoogleCalendarEvent(gcalEventId: string) {
+  if (!gcalEventId) return false;
+
+  try {
+    const settings = await getSettingsMap();
+
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || settings['google_calendar_id'] || 'primary';
+    const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || settings['google_service_account_email'];
+    let privateKey = process.env.GOOGLE_PRIVATE_KEY || settings['google_private_key'];
+
+    if (!calendarId || !clientEmail || !privateKey) {
+      console.warn('[Google Calendar Warning] Service account credentials missing. Cannot delete event.');
+      return false;
+    }
+
+    privateKey = privateKey.trim();
+    if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+      privateKey = privateKey.slice(1, -1);
+    }
+    privateKey = privateKey.replace(/\\n/g, '\n');
+
+    const auth = new google.auth.JWT({
+      email: clientEmail,
+      key: privateKey,
+      scopes: ['https://www.googleapis.com/auth/calendar.events'],
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth });
+
+    await calendar.events.delete({
+      calendarId,
+      eventId: gcalEventId,
+    });
+
+    console.log('[Google Calendar Success] Event deleted:', gcalEventId);
+    return true;
+  } catch (error: any) {
+    console.error('[Google Calendar Error] Failed to delete event:', error?.message || error);
+    return false;
   }
 }

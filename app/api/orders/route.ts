@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendCancellationEmail } from '@/lib/resend';
+import { deleteGoogleCalendarEvent } from '@/lib/google-calendar';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -36,7 +37,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, status } = body;
+    const { id, status, reason } = body;
 
     if (!id || !status) {
       return NextResponse.json({ error: 'Chybí ID nebo nový status.' }, { status: 400 });
@@ -54,13 +55,19 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: error?.message || 'Chyba aktualizace stavu objednávky.' }, { status: 500 });
     }
 
-    // If order was cancelled, release slot in availability table
+    // If order was cancelled, release slot in availability table & delete Google Calendar event
     if (status === 'cancelled') {
       await supabaseAdmin
         .from('availability')
         .update({ is_booked: false, order_id: null })
         .eq('date', order.date)
         .eq('time', order.time);
+
+      if (order.gcal_event_id) {
+        deleteGoogleCalendarEvent(order.gcal_event_id).catch((gcalErr) =>
+          console.error('[Orders PUT GCal Delete Error]:', gcalErr)
+        );
+      }
 
       // Send cancellation email
       sendCancellationEmail({
@@ -69,6 +76,8 @@ export async function PUT(request: Request) {
         serviceTitle: order.service_title,
         date: order.date,
         time: order.time,
+        reason: reason || undefined,
+        cancelledByBarber: true,
       }).catch((err) => console.error('Cancellation email error:', err));
     }
 

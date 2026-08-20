@@ -142,6 +142,12 @@ export async function POST(request: Request) {
 
     if (calResult.status === 'rejected') {
       console.error('[Google Calendar Error]:', calResult.reason);
+    } else if (calResult.status === 'fulfilled' && calResult.value?.id) {
+      const gcalEventId = calResult.value.id;
+      await supabaseAdmin
+        .from('orders')
+        .update({ gcal_event_id: gcalEventId })
+        .eq('id', newOrder.id);
     }
 
     return NextResponse.json({

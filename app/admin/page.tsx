@@ -100,6 +100,14 @@ export default function AdminPage() {
   const [bulkDates, setBulkDates] = useState<string[]>([]);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
 
+  // Barber Cancellation System State
+  const [calSubTab, setCalSubTab] = useState<'schedule' | 'cancellation'>('schedule');
+  const [cancelTargetDates, setCancelTargetDates] = useState<string[]>([]);
+  const [cancelSelectedSlots, setCancelSelectedSlots] = useState<Set<string>>(new Set());
+  const [cancelReason, setCancelReason] = useState<string>('');
+  const [cancelAllDaySlots, setCancelAllDaySlots] = useState<boolean>(false);
+  const [isBulkCancelling, setIsBulkCancelling] = useState<boolean>(false);
+
   // Service Form State
   const [editingService, setEditingService] = useState<Partial<Service> | null>(null);
 
@@ -349,20 +357,70 @@ export default function AdminPage() {
     }
   };
 
-  // Cancel Order from Admin
+  // Cancel Single Order from Admin Table
   const handleCancelOrder = async (id: string) => {
-    if (!confirm('Opravdu chcete stornovat tuto objednávku a uvolnit termín?')) return;
+    const reasonPrompt = prompt('Zadejte důvod zrušení rezervace pro klienta (volitelné):', '');
+    if (reasonPrompt === null) return; // User clicked Cancel in prompt
+
     try {
       const res = await fetch('/api/orders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: 'cancelled' }),
+        body: JSON.stringify({ id, status: 'cancelled', reason: reasonPrompt }),
       });
       if (!res.ok) throw new Error();
-      showToast('Objednávka byla stornována a termín uvolněn.');
+      showToast('Objednávka byla stornována, smazána z GCal a klient obdržel e-mail.');
       loadAllData();
     } catch (err) {
       showToast('Chyba při rušení objednávky.', 'error');
+    }
+  };
+
+  // Execute Bulk Cancellation from Barber Cancellation Interface
+  const handleExecuteBulkCancel = async () => {
+    const datesToCancel = cancelTargetDates.length > 0 ? cancelTargetDates : [selectedDate];
+    if (datesToCancel.length === 0) {
+      showToast('Vyberte alespoň jeden den pro stornování.', 'error');
+      return;
+    }
+
+    if (!cancelAllDaySlots && cancelSelectedSlots.size === 0) {
+      showToast('Vyberte časové sloty k rušení nebo zaškrtněte zrušení celého dne.', 'error');
+      return;
+    }
+
+    const confirmMsg = cancelAllDaySlots
+      ? `Opravdu chcete ZRUŠIT VŠECHNY rezervace a sloty v ${datesToCancel.length} vybraných dnech?`
+      : `Opravdu chcete zrušit ${cancelSelectedSlots.size} vybraných slotů pro ${datesToCancel.length} dnů a odeslat notifikace klientům?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    setIsBulkCancelling(true);
+    try {
+      const res = await fetch('/api/admin/bulk-cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetDates: datesToCancel,
+          timeSlots: Array.from(cancelSelectedSlots),
+          cancelAllInSlots: cancelAllDaySlots,
+          reason: cancelReason,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Chyba při rušení termínů.');
+
+      showToast(data.message || 'Termíny byly stornovány, smazány z GCal a klienti obdrželi e-mail.');
+      setCancelSelectedSlots(new Set());
+      setCancelTargetDates([]);
+      setCancelReason('');
+      setCancelAllDaySlots(false);
+      loadAllData();
+    } catch (err: any) {
+      showToast(err.message || 'Chyba při rušení termínů.', 'error');
+    } finally {
+      setIsBulkCancelling(false);
     }
   };
 
@@ -521,245 +579,485 @@ export default function AdminPage() {
         <main className="flex-1 glass-card rounded-2xl p-6 border-slate-800">
           {/* TAB 1: KALENDÁŘ A DOSTUPNOST */}
           {activeTab === 'calendar' && (
-            <div className="space-y-8">
-              <div>
-                <h2 className="text-xl font-bold text-white mb-1">Správa Kalendáře & Otvírací doby</h2>
-                <p className="text-xs text-slate-400">
-                  Vyberte den v kalendáři, zaklikněte dostupné 15minutové termíny nebo označte den jako dovolenou.
-                </p>
-              </div>
-
-              <div className="grid lg:grid-cols-12 gap-8">
-                {/* CALENDAR PICKER (5 COLS) */}
-                <div className="lg:col-span-5 bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <button
-                      onClick={() =>
-                        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
-                      }
-                      className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-                    <span className="font-bold text-sm text-amber-400 capitalize">
-                      {formatMonthYear(currentMonth)}
-                    </span>
-                    <button
-                      onClick={() =>
-                        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
-                      }
-                      className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-7 text-center text-[10px] font-bold text-slate-500 uppercase mb-2">
-                    <span>Po</span><span>Út</span><span>St</span><span>Čt</span><span>Pá</span><span>So</span><span>Ne</span>
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-1">
-                    {Array.from({ length: firstDayOfMonth(currentMonth) }).map((_, i) => (
-                      <div key={`empty-${i}`} className="h-9" />
-                    ))}
-
-                    {Array.from({ length: daysInMonth(currentMonth) }).map((_, i) => {
-                      const dayNum = i + 1;
-                      const dateStr = getDateString(currentMonth.getFullYear(), currentMonth.getMonth(), dayNum);
-                      const status = getDateStatus(dateStr);
-                      const isSelected = selectedDate === dateStr;
-                      const isBulkSelected = bulkDates.includes(dateStr);
-
-                      let bgStyle = 'bg-slate-900 text-slate-600';
-                      let badge = '';
-
-                      if (status === 'green') bgStyle = 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300';
-                      else if (status === 'orange') bgStyle = 'bg-amber-950/60 border-amber-500/40 text-amber-300';
-                      else if (status === 'last-one') {
-                        bgStyle = 'bg-red-950/80 border-red-500/60 text-red-300 font-bold';
-                        badge = '1 termín';
-                      } else if (status === 'full') bgStyle = 'bg-slate-900 border-slate-800 text-slate-600 line-through';
-                      else if (status === 'vacation') {
-                        bgStyle = 'bg-rose-950/60 border-rose-800/50 text-rose-400';
-                        badge = 'Dovolená';
-                      }
-
-                      if (isSelected) bgStyle += ' ring-2 ring-amber-500 font-bold text-white';
-
-                      return (
-                        <button
-                          key={dateStr}
-                          onClick={(e) => {
-                            if (e.shiftKey) {
-                              // Bulk multi-select toggle
-                              setBulkDates((prev) =>
-                                prev.includes(dateStr)
-                                  ? prev.filter((d) => d !== dateStr)
-                                  : [...prev, dateStr]
-                              );
-                            } else {
-                              setSelectedDate(dateStr);
-                            }
-                          }}
-                          className={`h-10 rounded-lg border text-xs flex flex-col items-center justify-center relative transition-all ${bgStyle}`}
-                        >
-                          <span>{dayNum}</span>
-                          {isBulkSelected && (
-                            <span className="w-2 h-2 rounded-full bg-amber-500 absolute top-1 right-1" />
-                          )}
-                          {badge && <span className="text-[7px] font-normal">{badge}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* CALENDAR LEGEND */}
-                  <div className="pt-3 border-t border-slate-800 text-[11px] space-y-1 text-slate-400">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Volno (&lt;50% obsazeno)
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Částečně obsazeno (&gt;50%)
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Poslední 1 termín
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-800" /> Dovolená / Nestříhám
-                    </div>
-                    <p className="text-[10px] text-slate-500 pt-1">
-                      * Pro hromadný výběr dnů klonování držte klávesu SHIFT při klikání na kalendář.
-                    </p>
-                  </div>
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white mb-1">Kalendář & Termíny Barbera</h2>
+                  <p className="text-xs text-slate-400">
+                    Spravujte otevírací dobu, zaklikávejte sloty nebo stornujte termíny pro klienty.
+                  </p>
                 </div>
 
-                {/* TIME SLOTS GENERATOR (7 COLS) */}
-                <div className="lg:col-span-7 space-y-6">
-                  <div className="flex items-center justify-between bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                {/* SUB-TAB TOGGLE */}
+                <div className="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs font-bold gap-1 self-start sm:self-auto">
+                  <button
+                    onClick={() => setCalSubTab('schedule')}
+                    className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
+                      calSubTab === 'schedule'
+                        ? 'bg-amber-600 text-slate-950 shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5" /> Otevírací doba & Sloty
+                  </button>
+                  <button
+                    onClick={() => setCalSubTab('cancellation')}
+                    className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
+                      calSubTab === 'cancellation'
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Storno termínů (Pro klienty)
+                  </button>
+                </div>
+              </div>
+
+              {calSubTab === 'schedule' ? (
+                /* SUB-TAB 1: OTEVÍRACÍ DOBA & SLOTY */
+                <div className="grid lg:grid-cols-12 gap-8">
+                  {/* CALENDAR PICKER (5 COLS) */}
+                  <div className="lg:col-span-5 bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <button
+                        onClick={() =>
+                          setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
+                        }
+                        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <span className="font-bold text-sm text-amber-400 capitalize">
+                        {formatMonthYear(currentMonth)}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+                        }
+                        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-7 text-center text-[10px] font-bold text-slate-500 uppercase mb-2">
+                      <span>Po</span><span>Út</span><span>St</span><span>Čt</span><span>Pá</span><span>So</span><span>Ne</span>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: firstDayOfMonth(currentMonth) }).map((_, i) => (
+                        <div key={`empty-${i}`} className="h-9" />
+                      ))}
+
+                      {Array.from({ length: daysInMonth(currentMonth) }).map((_, i) => {
+                        const dayNum = i + 1;
+                        const dateStr = getDateString(currentMonth.getFullYear(), currentMonth.getMonth(), dayNum);
+                        const status = getDateStatus(dateStr);
+                        const isSelected = selectedDate === dateStr;
+                        const isBulkSelected = bulkDates.includes(dateStr);
+
+                        let bgStyle = 'bg-slate-900 text-slate-600';
+                        let badge = '';
+
+                        if (status === 'green') bgStyle = 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300';
+                        else if (status === 'orange') bgStyle = 'bg-amber-950/60 border-amber-500/40 text-amber-300';
+                        else if (status === 'last-one') {
+                          bgStyle = 'bg-red-950/80 border-red-500/60 text-red-300 font-bold';
+                          badge = '1 termín';
+                        } else if (status === 'full') bgStyle = 'bg-slate-900 border-slate-800 text-slate-600 line-through';
+                        else if (status === 'vacation') {
+                          bgStyle = 'bg-rose-950/60 border-rose-800/50 text-rose-400';
+                          badge = 'Dovolená';
+                        }
+
+                        if (isSelected) bgStyle += ' ring-2 ring-amber-500 font-bold text-white';
+
+                        return (
+                          <button
+                            key={dateStr}
+                            onClick={(e) => {
+                              if (e.shiftKey) {
+                                setBulkDates((prev) =>
+                                  prev.includes(dateStr)
+                                    ? prev.filter((d) => d !== dateStr)
+                                    : [...prev, dateStr]
+                                );
+                              } else {
+                                setSelectedDate(dateStr);
+                              }
+                            }}
+                            className={`h-10 rounded-lg border text-xs flex flex-col items-center justify-center relative transition-all ${bgStyle}`}
+                          >
+                            <span>{dayNum}</span>
+                            {isBulkSelected && (
+                              <span className="w-2 h-2 rounded-full bg-amber-500 absolute top-1 right-1" />
+                            )}
+                            {badge && <span className="text-[7px] font-normal">{badge}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* CALENDAR LEGEND */}
+                    <div className="pt-3 border-t border-slate-800 text-[11px] space-y-1 text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Volno (&lt;50% obsazeno)
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Částečně obsazeno (&gt;50%)
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Poslední 1 termín
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-800" /> Dovolená / Nestříhám
+                      </div>
+                      <p className="text-[10px] text-slate-500 pt-1">
+                        * Pro hromadný výběr dnů klonování držte klávesu SHIFT při klikání na kalendář.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* TIME SLOTS GENERATOR (7 COLS) */}
+                  <div className="lg:col-span-7 space-y-6">
+                    <div className="flex items-center justify-between bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                      <div>
+                        <h3 className="font-bold text-sm text-white">Vybraný den: {selectedDate}</h3>
+                        <p className="text-xs text-slate-400">
+                          {activeTimes.size} aktivních slotů
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setIsVacation(!isVacation)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+                            isVacation
+                              ? 'bg-rose-950 text-rose-300 border-rose-800'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <Palmtree className="w-3.5 h-3.5" />
+                          {isVacation ? 'Zrušit dovolenou' : 'Označit jako Dovolená'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {!isVacation && (
+                      <>
+                        {/* QUICK PRESET BUTTONS */}
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <button
+                            onClick={() => {
+                              const times = new Set<string>();
+                              GENERATED_TIME_SLOTS.forEach((t) => {
+                                const h = parseInt(t.split(':')[0]);
+                                if (h >= 8 && h < 17) times.add(t);
+                              });
+                              setActiveTimes(times);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300"
+                          >
+                            Šablona 8:00–17:00
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              const times = new Set<string>();
+                              GENERATED_TIME_SLOTS.forEach((t) => {
+                                const h = parseInt(t.split(':')[0]);
+                                if (h >= 10 && h < 20) times.add(t);
+                              });
+                              setActiveTimes(times);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300"
+                          >
+                            Šablona 10:00–20:00
+                          </button>
+
+                          <button
+                            onClick={() => setActiveTimes(new Set(GENERATED_TIME_SLOTS))}
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300"
+                          >
+                            Vybrat vše
+                          </button>
+
+                          <button
+                            onClick={() => setActiveTimes(new Set())}
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-rose-400"
+                          >
+                            Vymazat sloty
+                          </button>
+                        </div>
+
+                        {/* 15-MIN TIME SLOTS GRID */}
+                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-72 overflow-y-auto pr-1">
+                          {GENERATED_TIME_SLOTS.map((t) => {
+                            const isActive = activeTimes.has(t);
+                            return (
+                              <button
+                                key={t}
+                                onClick={() => toggleTimeSlot(t)}
+                                className={`py-2 rounded-lg text-xs font-medium border transition-all ${
+                                  isActive
+                                    ? 'bg-amber-600 border-amber-500 text-slate-950 font-bold'
+                                    : 'bg-slate-900/60 border-slate-800/80 text-slate-500 hover:text-white'
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+
+                    {/* BULK ACTION CLONE NOTICE */}
+                    {bulkDates.length > 0 && (
+                      <div className="bg-amber-950/30 border border-amber-500/30 p-3 rounded-xl text-xs text-amber-300 flex justify-between items-center">
+                        <span>
+                          Vybráno <strong>{bulkDates.length}</strong> dalších dnů pro klonování rozvrhu.
+                        </span>
+                        <button
+                          onClick={() => setBulkDates([])}
+                          className="text-amber-400 underline font-semibold"
+                        >
+                          Zrušit výběr
+                        </button>
+                      </div>
+                    )}
+
+                    {/* SAVE ACTIONS */}
+                    <div className="flex gap-3 pt-4 border-t border-slate-800">
+                      <button
+                        onClick={() => handleSaveAvailability(false)}
+                        className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2"
+                      >
+                        <Save className="w-4 h-4" /> Uložit rozvrh
+                      </button>
+
+                      <button
+                        onClick={() => handleSaveAvailability(true)}
+                        className="py-3 px-4 rounded-xl bg-slate-900 border border-slate-800 text-rose-400 hover:bg-rose-950/40 text-xs font-semibold"
+                      >
+                        Nastavit "Nestříhám"
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* SUB-TAB 2: VIZUÁLNÍ STORNO TERMÍNŮ K BARBEROVI */
+                <div className="grid lg:grid-cols-12 gap-8">
+                  {/* CALENDAR PICKER PRO RUŠENÍ (5 COLS) */}
+                  <div className="lg:col-span-5 bg-rose-950/20 p-4 rounded-xl border border-rose-900/40 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <button
+                        onClick={() =>
+                          setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
+                        }
+                        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <span className="font-bold text-sm text-rose-400 capitalize">
+                        {formatMonthYear(currentMonth)}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+                        }
+                        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-7 text-center text-[10px] font-bold text-slate-500 uppercase mb-2">
+                      <span>Po</span><span>Út</span><span>St</span><span>Čt</span><span>Pá</span><span>So</span><span>Ne</span>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: firstDayOfMonth(currentMonth) }).map((_, i) => (
+                        <div key={`empty-c-${i}`} className="h-9" />
+                      ))}
+
+                      {Array.from({ length: daysInMonth(currentMonth) }).map((_, i) => {
+                        const dayNum = i + 1;
+                        const dateStr = getDateString(currentMonth.getFullYear(), currentMonth.getMonth(), dayNum);
+                        const isTarget = cancelTargetDates.includes(dateStr) || selectedDate === dateStr;
+
+                        // Check if day has confirmed orders
+                        const dayOrdersCount = orders.filter(
+                          (o) => o.date === dateStr && o.status !== 'cancelled'
+                        ).length;
+
+                        return (
+                          <button
+                            key={`c-${dateStr}`}
+                            onClick={() => {
+                              setCancelTargetDates((prev) => {
+                                if (prev.includes(dateStr)) {
+                                  return prev.filter((d) => d !== dateStr);
+                                }
+                                return [...prev, dateStr];
+                              });
+                              setSelectedDate(dateStr);
+                            }}
+                            className={`h-10 rounded-lg border text-xs flex flex-col items-center justify-center relative transition-all ${
+                              isTarget
+                                ? 'bg-rose-900 border-rose-500 text-white font-bold ring-2 ring-rose-500'
+                                : dayOrdersCount > 0
+                                ? 'bg-amber-950/40 border-amber-800/40 text-amber-300'
+                                : 'bg-slate-900 border-slate-800 text-slate-500'
+                            }`}
+                          >
+                            <span>{dayNum}</span>
+                            {dayOrdersCount > 0 && (
+                              <span className="text-[8px] bg-rose-600 text-white px-1 rounded-full font-bold">
+                                {dayOrdersCount} obj
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="pt-3 border-t border-rose-900/30 text-[11px] space-y-1 text-slate-400">
+                      <p className="text-rose-300 font-semibold">
+                        💡 Klikáním na dny vybíráte dny k rušení termínů (můžete vybrat více dnů najednou).
+                      </p>
+                      {cancelTargetDates.length > 0 && (
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-white text-xs">
+                            Vybráno dnů: <strong>{cancelTargetDates.length}</strong>
+                          </span>
+                          <button
+                            onClick={() => setCancelTargetDates([])}
+                            className="text-xs text-rose-400 hover:underline"
+                          >
+                            Vymazat výběr dnů
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* FORM PRO RUŠENÍ & DŮVOD (7 COLS) */}
+                  <div className="lg:col-span-7 bg-slate-900/60 p-5 rounded-xl border border-slate-800 space-y-5">
                     <div>
-                      <h3 className="font-bold text-sm text-white">Vybraný den: {selectedDate}</h3>
-                      <p className="text-xs text-slate-400">
-                        {activeTimes.size} aktivních slotů
+                      <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                        <Trash2 className="w-4 h-4 text-rose-500" /> Storno termínů pro klienta
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Vybrané dny: <strong>{(cancelTargetDates.length > 0 ? cancelTargetDates : [selectedDate]).join(', ')}</strong>
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setIsVacation(!isVacation)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all ${
-                          isVacation
-                            ? 'bg-rose-950 text-rose-300 border-rose-800'
-                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                        }`}
-                      >
-                        <Palmtree className="w-3.5 h-3.5" />
-                        {isVacation ? 'Zrušit dovolenou' : 'Označit jako Dovolená'}
-                      </button>
+                    {/* REZERVACE NA TYTO DNY */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-300">
+                        Existující rezervace v těchto dnech:
+                      </label>
+                      <div className="max-h-36 overflow-y-auto bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1.5">
+                        {orders.filter((o) =>
+                          (cancelTargetDates.length > 0 ? cancelTargetDates : [selectedDate]).includes(o.date) &&
+                          o.status !== 'cancelled'
+                        ).length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">V tyto dny nejsou žádné aktivní rezervace od zákazníků.</p>
+                        ) : (
+                          orders
+                            .filter((o) =>
+                              (cancelTargetDates.length > 0 ? cancelTargetDates : [selectedDate]).includes(o.date) &&
+                              o.status !== 'cancelled'
+                            )
+                            .map((o) => (
+                              <div
+                                key={o.id}
+                                className="flex justify-between items-center text-xs bg-slate-900 p-2 rounded border border-slate-800"
+                              >
+                                <div>
+                                  <span className="font-bold text-rose-400">{o.date} {o.time}</span> —{' '}
+                                  <span className="text-white font-medium">{o.client_name}</span> ({o.service_title})
+                                </div>
+                                <span className="text-[10px] text-slate-400">{o.client_email}</span>
+                              </div>
+                            ))
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {!isVacation && (
-                    <>
-                      {/* QUICK PRESET BUTTONS */}
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <button
-                          onClick={() => {
-                            const times = new Set<string>();
-                            GENERATED_TIME_SLOTS.forEach((t) => {
-                              const h = parseInt(t.split(':')[0]);
-                              if (h >= 8 && h < 17) times.add(t);
-                            });
-                            setActiveTimes(times);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300"
-                        >
-                          Šablona 8:00–17:00
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            const times = new Set<string>();
-                            GENERATED_TIME_SLOTS.forEach((t) => {
-                              const h = parseInt(t.split(':')[0]);
-                              if (h >= 10 && h < 20) times.add(t);
-                            });
-                            setActiveTimes(times);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300"
-                        >
-                          Šablona 10:00–20:00
-                        </button>
-
-                        <button
-                          onClick={() => setActiveTimes(new Set(GENERATED_TIME_SLOTS))}
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300"
-                        >
-                          Vybrat vše
-                        </button>
-
-                        <button
-                          onClick={() => setActiveTimes(new Set())}
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-rose-400"
-                        >
-                          Vymazat sloty
-                        </button>
+                    {/* VYBERTE ČASOVÉ SLOTY NEBO CELÝ DEN */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-bold text-slate-300">Vyberte časy ke zrušení:</label>
+                        <label className="flex items-center gap-1.5 text-xs text-rose-400 font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={cancelAllDaySlots}
+                            onChange={(e) => setCancelAllDaySlots(e.target.checked)}
+                            className="rounded border-slate-700 bg-slate-900 text-rose-600 focus:ring-rose-500"
+                          />
+                          Zrušit VŠECHNY sloty v těchto dnech
+                        </label>
                       </div>
 
-                      {/* 15-MIN TIME SLOTS GRID */}
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-72 overflow-y-auto pr-1">
-                        {GENERATED_TIME_SLOTS.map((t) => {
-                          const isActive = activeTimes.has(t);
-                          return (
-                            <button
-                              key={t}
-                              onClick={() => toggleTimeSlot(t)}
-                              className={`py-2 rounded-lg text-xs font-medium border transition-all ${
-                                isActive
-                                  ? 'bg-amber-600 border-amber-500 text-slate-950 font-bold'
-                                  : 'bg-slate-900/60 border-slate-800/80 text-slate-500 hover:text-white'
-                              }`}
-                            >
-                              {t}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-
-                  {/* BULK ACTION CLONE NOTICE */}
-                  {bulkDates.length > 0 && (
-                    <div className="bg-amber-950/30 border border-amber-500/30 p-3 rounded-xl text-xs text-amber-300 flex justify-between items-center">
-                      <span>
-                        Vybráno <strong>{bulkDates.length}</strong> dalších dnů pro klonování rozvrhu.
-                      </span>
-                      <button
-                        onClick={() => setBulkDates([])}
-                        className="text-amber-400 underline font-semibold"
-                      >
-                        Zrušit výběr
-                      </button>
+                      {!cancelAllDaySlots && (
+                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto pr-1">
+                          {GENERATED_TIME_SLOTS.map((t) => {
+                            const isSelectedSlot = cancelSelectedSlots.has(t);
+                            return (
+                              <button
+                                key={`cs-${t}`}
+                                onClick={() => {
+                                  setCancelSelectedSlots((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(t)) next.delete(t);
+                                    else next.add(t);
+                                    return next;
+                                  });
+                                }}
+                                className={`py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                  isSelectedSlot
+                                    ? 'bg-rose-600 border-rose-500 text-white font-bold'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  {/* SAVE ACTIONS */}
-                  <div className="flex gap-3 pt-4 border-t border-slate-800">
-                    <button
-                      onClick={() => handleSaveAvailability(false)}
-                      className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-4 h-4" /> Uložit rozvrh
-                    </button>
+                    {/* DŮVOD ZRUŠENÍ (INPUT) */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                        <span>Důvod zrušení (bude odeslán klientům v e-mailu):</span>
+                        <span className="text-[10px] text-slate-500 font-normal">volitelné</span>
+                      </label>
+                      <textarea
+                        value={cancelReason}
+                        onChange={(e) => setCancelReason(e.target.value)}
+                        placeholder="Např.: Z osobních/zdravotních důvodů musím termíny zrušit. Prosím vytvořte si novou rezervaci na jiný vyhovující termín."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-rose-500 min-h-[70px]"
+                      />
+                    </div>
 
+                    {/* POTVRZOVACÍ TLAČÍTKO */}
                     <button
-                      onClick={() => handleSaveAvailability(true)}
-                      className="py-3 px-4 rounded-xl bg-slate-900 border border-slate-800 text-rose-400 hover:bg-rose-950/40 text-xs font-semibold"
+                      onClick={handleExecuteBulkCancel}
+                      disabled={isBulkCancelling}
+                      className="w-full py-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm transition-all shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      Nastavit "Nestříhám"
+                      <Trash2 className="w-4 h-4" />
+                      {isBulkCancelling
+                        ? 'Ruším termíny a mažu z Google Kalendáře...'
+                        : 'Stornovat termíny, uvolnit kalendář & odeslat e-maily klientům'}
                     </button>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

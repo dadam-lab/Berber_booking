@@ -327,7 +327,7 @@ ${booking.note ? `Poznámka: ${booking.note}\n` : ''}`;
 }
 
 /**
- * Send cancellation email to client and barber using Nodemailer.
+ * Send cancellation email to client and barber using Nodemailer or Resend API.
  */
 export async function sendCancellationEmail(details: {
   clientEmail: string;
@@ -335,14 +335,17 @@ export async function sendCancellationEmail(details: {
   serviceTitle: string;
   date: string;
   time: string;
+  reason?: string;
+  cancelledByBarber?: boolean;
 }) {
   const emailUser = process.env.EMAIL_USER;
   const emailPass = process.env.EMAIL_APP_PASSWORD;
-
-  if (!emailUser || !emailPass) return;
-
   const settings = await getSettingsMap();
-  const barberEmail = settings['contact_email'] || emailUser;
+  const resendApiKey = process.env.RESEND_API_KEY || settings['resend_api_key'];
+  const senderAddress = process.env.SENDER_EMAIL || settings['sender_email'] || emailUser;
+  const barberEmail = settings['contact_email'] || emailUser || 'rezervace.swbarbershop@gmail.com';
+  const baseUrl = getBaseUrl();
+  const rebookUrl = baseUrl;
 
   const headerHtml = `
     <div style="border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 24px;">
@@ -352,7 +355,7 @@ export async function sendCancellationEmail(details: {
     </div>
   `;
 
-  const html = `
+  const clientHtml = `
     <div style="background-color: #09090b; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; border-radius: 12px; border: 1px solid #27272a;">
       ${headerHtml}
       
@@ -363,11 +366,25 @@ export async function sendCancellationEmail(details: {
       <h2 style="color: #ffffff; font-size: 22px; margin-top: 0; margin-bottom: 16px;">Rezervace byla zrušena</h2>
       
       <p style="color: #e4e4e7; font-size: 15px; line-height: 1.5; margin-bottom: 20px;">
-        Rezervace pro <strong>${details.clientName}</strong> na službu <strong>${details.serviceTitle}</strong> dne <strong>${details.date} v ${details.time}</strong> byla zrušena.
+        Dobrý den, Vaše rezervace pro <strong>${details.clientName}</strong> na službu <strong>${details.serviceTitle}</strong> dne <strong>${details.date} v ${details.time}</strong> byla zrušena.
       </p>
+
+      ${details.reason ? `
+      <div style="background-color: #1c1917; border-left: 3px solid #f59e0b; padding: 14px 16px; border-radius: 6px; margin: 20px 0; font-size: 14px; color: #f59e0b;">
+        <strong>Důvod zrušení ze strany barbera:</strong> ${details.reason}
+      </div>
+      ` : ''}
       
-      <div style="background-color: #121215; border: 1px solid #27272a; padding: 16px; border-radius: 8px; font-size: 14px; color: #a1a1aa; margin-top: 20px;">
-        Termín v kalendáři byl automaticky uvolněn pro ostatní zákazníky.
+      <div style="background-color: #121215; border: 1px solid #27272a; padding: 20px; border-radius: 8px; margin: 24px 0; text-align: center;">
+        <div style="font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 8px;">
+          📅 Vyberte si nový vyhovující termín
+        </div>
+        <p style="color: #a1a1aa; font-size: 13px; margin-bottom: 16px;">
+          Můžete si kdykoliv online vybrat náhradní termín v našem rezervačním kalendáři.
+        </p>
+        <a href="${rebookUrl}" target="_blank" style="background-color: #f59e0b; color: #09090b; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: bold; display: inline-block;">
+          Objednat se na jiný termín
+        </a>
       </div>
 
       <div style="border-top: 1px solid #27272a; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 12px; color: #71717a;">
@@ -376,22 +393,95 @@ export async function sendCancellationEmail(details: {
     </div>
   `;
 
+  const clientText = `Dobrý den ${details.clientName},
+
+Vaše rezervace v SW-Barber na službu ${details.serviceTitle} dne ${details.date} v ${details.time} byla zrušena.
+${details.reason ? `\nDůvod zrušení ze strany barbera: ${details.reason}\n` : ''}
+Pro výběr nového výhovujícího termínu navštivte: ${rebookUrl}
+
+S pozdravem,
+SW-Barber`;
+
+  const barberHtml = `
+    <div style="background-color: #09090b; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; border-radius: 12px; border: 1px solid #27272a;">
+      ${headerHtml}
+      
+      <div style="display: inline-block; background-color: #27272a; color: #ef4444; border: 1px solid #ef4444; padding: 4px 12px; border-radius: 9999px; font-size: 13px; font-weight: bold; margin-bottom: 16px;">
+        STORNO REZERVACE
+      </div>
+      
+      <h2 style="color: #ffffff; font-size: 22px; margin-top: 0; margin-bottom: 16px;">Rezervace byla stornována</h2>
+      
+      <p style="color: #e4e4e7; font-size: 15px; line-height: 1.5; margin-bottom: 20px;">
+        Rezervace klienta <strong>${details.clientName}</strong> (${details.clientEmail}) na službu <strong>${details.serviceTitle}</strong> dne <strong>${details.date} v ${details.time}</strong> byla zrušena.
+      </p>
+
+      ${details.reason ? `
+      <div style="background-color: #1c1917; border-left: 3px solid #f59e0b; padding: 14px 16px; border-radius: 6px; margin: 20px 0; font-size: 14px; color: #f59e0b;">
+        <strong>Důvod:</strong> ${details.reason}
+      </div>
+      ` : ''}
+
+      <div style="border-top: 1px solid #27272a; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 12px; color: #71717a;">
+        © ${new Date().getFullYear()} SW-Barber. Všechna práva vyhrazena.
+      </div>
+    </div>
+  `;
+
+  const barberText = `Rezervace klienta ${details.clientName} (${details.clientEmail}) na službu ${details.serviceTitle} dne ${details.date} v ${details.time} byla zrušena.${details.reason ? ` Důvod: ${details.reason}` : ''}`;
+
+  // Option A: Send via Resend API if configured
+  if (resendApiKey) {
+    const resend = new Resend(resendApiKey);
+    try {
+      await Promise.all([
+        resend.emails.send({
+          from: `SW-Barber <${senderAddress}>`,
+          reply_to: senderAddress,
+          to: details.clientEmail,
+          subject: `SW-Barber | Storno rezervace - ${details.date} ${details.time}`,
+          text: clientText,
+          html: clientHtml,
+        }),
+        resend.emails.send({
+          from: `SW-Barber <${senderAddress}>`,
+          reply_to: details.clientEmail,
+          to: barberEmail,
+          subject: `SW-Barber | [Storno] Rezervace zrušena: ${details.clientName} (${details.date})`,
+          text: barberText,
+          html: barberHtml,
+        }),
+      ]);
+      console.log('[Resend API Success] Cancellation emails sent.');
+    } catch (err) {
+      console.error('[Resend API Cancellation Error]:', err);
+    }
+    return;
+  }
+
+  // Option B: Fallback to Nodemailer Gmail SMTP
+  if (!emailUser || !emailPass) return;
   try {
     const mailer = getTransporter();
     await Promise.all([
       mailer.sendMail({
         from: `"SW-Barber" <${emailUser}>`,
+        replyTo: emailUser,
         to: details.clientEmail,
         subject: `SW-Barber | Storno rezervace - ${details.date} ${details.time}`,
-        html,
+        text: clientText,
+        html: clientHtml,
       }),
       mailer.sendMail({
         from: `"SW-Barber" <${emailUser}>`,
+        replyTo: details.clientEmail,
         to: barberEmail,
         subject: `SW-Barber | [Storno] Rezervace zrušena: ${details.clientName} (${details.date})`,
-        html,
+        text: barberText,
+        html: barberHtml,
       }),
     ]);
+    console.log('[Nodemailer Success] Cancellation emails sent.');
   } catch (err) {
     console.error('[Nodemailer Storno Error]:', err);
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendCancellationEmail } from '@/lib/resend';
+import { deleteGoogleCalendarEvent } from '@/lib/google-calendar';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,7 +83,14 @@ export async function POST(request: Request) {
       console.error('[Cancel Booking Error] Availability update failed:', availError);
     }
 
-    // 4. Odeslat storno e-mail klientovi a barberovi (awaiting to ensure delivery)
+    // 4. Smazat událost z Google Kalendáře, pokud existuje ID
+    if (order.gcal_event_id) {
+      deleteGoogleCalendarEvent(order.gcal_event_id).catch((gcalErr) =>
+        console.error('[Cancel Booking GCal Delete Error]:', gcalErr)
+      );
+    }
+
+    // 5. Odeslat storno e-mail klientovi a barberovi (awaiting to ensure delivery)
     try {
       await sendCancellationEmail({
         clientEmail: order.client_email,
