@@ -15,11 +15,58 @@ import { SITE_CONFIG, DEFAULT_SERVICES } from '@/lib/siteConfig';
 interface ClientHomeProps {
   initialServices?: Service[];
   initialGallery?: GalleryItem[];
+  initialSettings?: Record<string, string>;
 }
 
-export default function ClientHome({ initialServices, initialGallery }: ClientHomeProps = {}) {
-  // Statická konfigurace — reálné texty, okamžitý render, žádné výchozí placeholdery
-  const [cmsConfig, setCmsConfig] = useState<CmsConfig>(SITE_CONFIG);
+function parseSettingsToCmsConfig(s: Record<string, string>, base: CmsConfig): CmsConfig {
+  if (!s || typeof s !== 'object' || Object.keys(s).length === 0) return base;
+  return {
+    ...base,
+    shopName: s.shop_name || s.barber_name || base.shopName,
+    tagline: s.tagline || base.tagline,
+    heroHeadline: s.hero_headline || base.heroHeadline,
+    heroSubheadline: s.hero_subheadline || base.heroSubheadline,
+    aboutTitle: s.about_title || base.aboutTitle,
+    aboutText: s.about_text || s.barber_bio || base.aboutText,
+    ownerName: s.owner_name || s.barber_name || base.ownerName,
+    ownerTitle: s.owner_title || s.barber_role || base.ownerTitle,
+    ownerPhotoUrl: s.owner_photo_url || s.barber_avatar || base.ownerPhotoUrl,
+    logoUrl: s.logo_url !== undefined ? s.logo_url : base.logoUrl,
+    phone: s.contact_phone || base.phone,
+    email: s.contact_email || base.email,
+    address: s.contact_address || base.address,
+    city: s.city || base.city,
+    postalCode: s.postal_code || base.postalCode,
+    contactDescription: s.contact_description || base.contactDescription,
+    googleMapsUrl: s.google_maps_url || s.google_maps_iframe || base.googleMapsUrl,
+    instagramUrl: s.instagram_url !== undefined ? s.instagram_url : base.instagramUrl,
+    personalInstagramUrl: s.personal_instagram_url !== undefined ? s.personal_instagram_url : base.personalInstagramUrl,
+    instagramEnabled: s.instagram_enabled !== undefined ? s.instagram_enabled === 'true' : base.instagramEnabled,
+    personalInstagramEnabled: s.personal_instagram_enabled !== undefined ? s.personal_instagram_enabled === 'true' : base.personalInstagramEnabled,
+    primaryColor: s.primary_color || base.primaryColor,
+    secondaryColor: s.secondary_color || base.secondaryColor,
+  };
+}
+
+export default function ClientHome({ initialServices, initialGallery, initialSettings }: ClientHomeProps = {}) {
+  // Instant render from server settings or cached settings — prevents layout/photo flash
+  const [cmsConfig, setCmsConfig] = useState<CmsConfig>(() => {
+    if (initialSettings && Object.keys(initialSettings).length > 0) {
+      return parseSettingsToCmsConfig(initialSettings, SITE_CONFIG);
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('barber_settings');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === 'object') {
+            return parseSettingsToCmsConfig(parsed, SITE_CONFIG);
+          }
+        }
+      } catch (e) {}
+    }
+    return SITE_CONFIG;
+  });
 
   const [services, setServices] = useState<Service[]>(() => {
     if (initialServices && initialServices.length > 0) return initialServices;
@@ -87,32 +134,10 @@ export default function ClientHome({ initialServices, initialGallery }: ClientHo
         const dataS = await resSettings.json();
         if (dataS.settings) {
           const s = dataS.settings;
-          setCmsConfig((prev) => ({
-            ...prev,
-            shopName: s.shop_name || s.barber_name || prev.shopName,
-            tagline: s.tagline || prev.tagline,
-            heroHeadline: s.hero_headline || prev.heroHeadline,
-            heroSubheadline: s.hero_subheadline || prev.heroSubheadline,
-            aboutTitle: s.about_title || prev.aboutTitle,
-            aboutText: s.about_text || s.barber_bio || prev.aboutText,
-            ownerName: s.owner_name || s.barber_name || prev.ownerName,
-            ownerTitle: s.owner_title || s.barber_role || prev.ownerTitle,
-            ownerPhotoUrl: s.owner_photo_url || s.barber_avatar || prev.ownerPhotoUrl,
-            logoUrl: s.logo_url !== undefined ? s.logo_url : prev.logoUrl,
-            phone: s.contact_phone || prev.phone,
-            email: s.contact_email || prev.email,
-            address: s.contact_address || prev.address,
-            city: s.city || prev.city,
-            postalCode: s.postal_code || prev.postalCode,
-            contactDescription: s.contact_description || prev.contactDescription,
-            googleMapsUrl: s.google_maps_url || s.google_maps_iframe || prev.googleMapsUrl,
-            instagramUrl: s.instagram_url !== undefined ? s.instagram_url : prev.instagramUrl,
-            personalInstagramUrl: s.personal_instagram_url !== undefined ? s.personal_instagram_url : prev.personalInstagramUrl,
-            instagramEnabled: s.instagram_enabled !== undefined ? s.instagram_enabled === 'true' : prev.instagramEnabled,
-            personalInstagramEnabled: s.personal_instagram_enabled !== undefined ? s.personal_instagram_enabled === 'true' : prev.personalInstagramEnabled,
-            primaryColor: s.primary_color || prev.primaryColor,
-            secondaryColor: s.secondary_color || prev.secondaryColor,
-          }));
+          try {
+            localStorage.setItem('barber_settings', JSON.stringify(s));
+          } catch (e) {}
+          setCmsConfig((prev) => parseSettingsToCmsConfig(s, prev));
         }
       }
 
