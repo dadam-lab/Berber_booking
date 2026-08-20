@@ -1412,7 +1412,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           onChange={(e) => setBulkCancelAllDay(e.target.checked)}
                           className="rounded border-zinc-700 bg-zinc-900 text-rose-600 focus:ring-rose-500"
                         />
-                        Zrušit VŠECHNY termíny v těchto dnů
+                        Zrušit VŠECHNY termíny a označit dny jako "Nestříhám"
                       </label>
 
                       {/* Time Slots Grid */}

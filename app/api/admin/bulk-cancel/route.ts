@@ -70,19 +70,43 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Update availability table to unbook slots
-    let availQuery = supabaseAdmin
-      .from('availability')
-      .update({ is_booked: false, order_id: null })
-      .in('date', targetDates);
+    // 3. Update availability table
+    if (cancelAllInSlots) {
+      // Barber cancelled the whole day(s) -> mark dates as "Nestříhám / Dovolená" (is_vacation: true)
+      await supabaseAdmin
+        .from('availability')
+        .delete()
+        .in('date', targetDates);
 
-    if (!cancelAllInSlots && formattedSlots.length > 0) {
-      availQuery = availQuery.in('time', formattedSlots);
-    }
+      const vacationRows = targetDates.map((d: string) => ({
+        date: d,
+        time: '00:00:00',
+        is_booked: false,
+        is_vacation: true,
+      }));
 
-    const { error: availError } = await availQuery;
-    if (availError) {
-      console.error('[Bulk Cancel Availability Update Error]:', availError);
+      const { error: availError } = await supabaseAdmin
+        .from('availability')
+        .upsert(vacationRows, { onConflict: 'date,time' });
+
+      if (availError) {
+        console.error('[Bulk Cancel Vacation Upsert Error]:', availError);
+      }
+    } else {
+      // Partial cancellation of specific time slots only -> unbook selected slots
+      let availQuery = supabaseAdmin
+        .from('availability')
+        .update({ is_booked: false, order_id: null })
+        .in('date', targetDates);
+
+      if (formattedSlots.length > 0) {
+        availQuery = availQuery.in('time', formattedSlots);
+      }
+
+      const { error: availError } = await availQuery;
+      if (availError) {
+        console.error('[Bulk Cancel Availability Update Error]:', availError);
+      }
     }
 
     return NextResponse.json({
