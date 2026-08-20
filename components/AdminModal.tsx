@@ -1281,9 +1281,37 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <div className="grid md:grid-cols-2 gap-6">
                     {/* Left: Day Selector */}
                     <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-4">
-                      <label className="block text-xs font-bold text-amber-500 uppercase tracking-wider">
-                        1. Vyberte dny ke stornování
-                      </label>
+                      <div className="flex items-center justify-between pb-1">
+                        <label className="block text-xs font-bold text-amber-500 uppercase tracking-wider capitalize">
+                          1. Dny ke stornování ({vacationCalDate.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' })})
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const d = new Date(vacationCalDate);
+                              d.setMonth(d.getMonth() - 1);
+                              setVacationCalDate(d);
+                            }}
+                            className="p-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-amber-400 cursor-pointer flex items-center justify-center"
+                            title="Předchozí měsíc"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const d = new Date(vacationCalDate);
+                              d.setMonth(d.getMonth() + 1);
+                              setVacationCalDate(d);
+                            }}
+                            className="p-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-amber-400 cursor-pointer flex items-center justify-center"
+                            title="Následující měsíc"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
                       <p className="text-[11px] text-zinc-400">
                         Klikáním na dny níže vyberte dny k rušení (můžete zvolit i více dnů najednou).
                       </p>

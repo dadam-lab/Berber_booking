@@ -34,6 +34,24 @@ function getBaseUrl() {
   return 'https://swbarbershop.cz';
 }
 
+export function formatCzechDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  const clean = dateStr.trim();
+  const parts = clean.split(/[-/]/);
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    if (y.length === 4) {
+      return `${d.padStart(2, '0')}.${m.padStart(2, '0')}.${y}`;
+    }
+  }
+  return dateStr;
+}
+
+export function formatCzechTime(timeStr?: string): string {
+  if (!timeStr) return '';
+  return timeStr.trim().substring(0, 5);
+}
+
 /**
  * Send booking confirmation emails to both client and barber using Nodemailer.
  */
@@ -60,12 +78,8 @@ export async function sendBookingEmails(booking: {
   const barberName = 'SW-Barber';
   const address = settings['contact_address'] || 'SW-Barber Studio';
 
-  const formattedDate = new Date(`${booking.date}T${booking.time}`).toLocaleDateString('cs-CZ', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const formattedDate = formatCzechDate(booking.date);
+  const formattedTime = formatCzechTime(booking.time);
 
   const baseUrl = getBaseUrl();
   const cancelUrl = `${baseUrl}/zrusit-rezervaci?id=${booking.orderId}`;
@@ -112,7 +126,7 @@ export async function sendBookingEmails(booking: {
           </tr>
           <tr>
             <td style="padding: 12px 16px; border-bottom: 1px solid #27272a; color: #a1a1aa;">Datum a čas</td>
-            <td style="padding: 12px 16px; border-bottom: 1px solid #27272a; font-weight: bold; color: #ffffff; text-align: right;">${formattedDate} v ${booking.time}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #27272a; font-weight: bold; color: #ffffff; text-align: right;">${formattedDate} v ${formattedTime}</td>
           </tr>
           ${booking.note ? `
           <tr>
@@ -163,7 +177,7 @@ export async function sendBookingEmails(booking: {
 Tvoje rezervace v SW-Barber byla úspěšně potvrzena.
 
 Služba: ${booking.serviceTitle} (${booking.servicePrice} Kč)
-Termín: ${formattedDate} v ${booking.time}
+Termín: ${formattedDate} v ${formattedTime}
 ${booking.note ? `Poznámka: ${booking.note}\n` : ''}Adresa: ${address}
 
 Pro případné zrušení termínu navštivte: ${cancelUrl}
@@ -195,7 +209,7 @@ SW-Barber`;
           </tr>
           <tr>
             <td style="padding: 12px 16px; border-bottom: 1px solid #27272a; color: #a1a1aa;">Termín</td>
-            <td style="padding: 12px 16px; border-bottom: 1px solid #27272a; font-weight: bold; color: #ffffff; text-align: right;">${booking.date} v ${booking.time}</td>
+            <td style="padding: 12px 16px; border-bottom: 1px solid #27272a; font-weight: bold; color: #ffffff; text-align: right;">${formattedDate} v ${formattedTime}</td>
           </tr>
           ${booking.note ? `
           <tr>
@@ -216,7 +230,7 @@ SW-Barber`;
 
 Klient: ${booking.clientName} (${booking.clientEmail})
 Služba: ${booking.serviceTitle} (${booking.servicePrice} Kč)
-Termín: ${booking.date} v ${booking.time}
+Termín: ${formattedDate} v ${formattedTime}
 ${booking.note ? `Poznámka: ${booking.note}\n` : ''}`;
 
   const resendApiKey = process.env.RESEND_API_KEY || settings['resend_api_key'];
@@ -237,7 +251,7 @@ ${booking.note ? `Poznámka: ${booking.note}\n` : ''}`;
         from: `SW-Barber <${senderAddress}>`,
         reply_to: senderAddress,
         to: booking.clientEmail,
-        subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle}`,
+        subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle} (${formattedDate} ${formattedTime})`,
         text: clientText,
         html: clientHtml,
         attachments: [
@@ -258,7 +272,7 @@ ${booking.note ? `Poznámka: ${booking.note}\n` : ''}`;
         from: `SW-Barber <${senderAddress}>`,
         reply_to: booking.clientEmail,
         to: barberEmail,
-        subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
+        subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${formattedDate} ${formattedTime})`,
         text: barberText,
         html: barberHtml,
       });
@@ -284,7 +298,7 @@ ${booking.note ? `Poznámka: ${booking.note}\n` : ''}`;
       from: `"SW-Barber" <${emailUser}>`,
       replyTo: emailUser,
       to: booking.clientEmail,
-      subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle}`,
+      subject: `SW-Barber | Potvrzení termínu - ${booking.serviceTitle} (${formattedDate} ${formattedTime})`,
       text: clientText,
       html: clientHtml,
       attachments: [
@@ -307,7 +321,7 @@ ${booking.note ? `Poznámka: ${booking.note}\n` : ''}`;
       from: `"SW-Barber" <${emailUser}>`,
       replyTo: booking.clientEmail,
       to: barberEmail,
-      subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${booking.date} ${booking.time})`,
+      subject: `SW-Barber | Nová rezervace: ${booking.clientName} (${formattedDate} ${formattedTime})`,
       text: barberText,
       html: barberHtml,
     });
@@ -347,6 +361,9 @@ export async function sendCancellationEmail(details: {
   const baseUrl = getBaseUrl();
   const rebookUrl = baseUrl;
 
+  const cDate = formatCzechDate(details.date);
+  const cTime = formatCzechTime(details.time);
+
   const headerHtml = `
     <div style="border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 24px;">
       <div style="font-size: 22px; font-weight: 800; letter-spacing: 1.5px; color: #ffffff; text-transform: uppercase;">
@@ -366,7 +383,7 @@ export async function sendCancellationEmail(details: {
       <h2 style="color: #ffffff; font-size: 22px; margin-top: 0; margin-bottom: 16px;">Rezervace byla zrušena</h2>
       
       <p style="color: #e4e4e7; font-size: 15px; line-height: 1.5; margin-bottom: 20px;">
-        Dobrý den, Vaše rezervace pro <strong>${details.clientName}</strong> na službu <strong>${details.serviceTitle}</strong> dne <strong>${details.date} v ${details.time}</strong> byla zrušena.
+        Dobrý den, Vaše rezervace pro <strong>${details.clientName}</strong> na službu <strong>${details.serviceTitle}</strong> dne <strong>${cDate} v ${cTime}</strong> byla zrušena.
       </p>
 
       ${details.reason ? `
@@ -395,7 +412,7 @@ export async function sendCancellationEmail(details: {
 
   const clientText = `Dobrý den ${details.clientName},
 
-Vaše rezervace v SW-Barber na službu ${details.serviceTitle} dne ${details.date} v ${details.time} byla zrušena.
+Vaše rezervace v SW-Barber na službu ${details.serviceTitle} dne ${cDate} v ${cTime} byla zrušena.
 ${details.reason ? `\nDůvod zrušení ze strany barbera: ${details.reason}\n` : ''}
 Pro výběr nového výhovujícího termínu navštivte: ${rebookUrl}
 
@@ -413,7 +430,7 @@ SW-Barber`;
       <h2 style="color: #ffffff; font-size: 22px; margin-top: 0; margin-bottom: 16px;">Rezervace byla stornována</h2>
       
       <p style="color: #e4e4e7; font-size: 15px; line-height: 1.5; margin-bottom: 20px;">
-        Rezervace klienta <strong>${details.clientName}</strong> (${details.clientEmail}) na službu <strong>${details.serviceTitle}</strong> dne <strong>${details.date} v ${details.time}</strong> byla zrušena.
+        Rezervace klienta <strong>${details.clientName}</strong> (${details.clientEmail}) na službu <strong>${details.serviceTitle}</strong> dne <strong>${cDate} v ${cTime}</strong> byla zrušena.
       </p>
 
       ${details.reason ? `
@@ -428,7 +445,7 @@ SW-Barber`;
     </div>
   `;
 
-  const barberText = `Rezervace klienta ${details.clientName} (${details.clientEmail}) na službu ${details.serviceTitle} dne ${details.date} v ${details.time} byla zrušena.${details.reason ? ` Důvod: ${details.reason}` : ''}`;
+  const barberText = `Rezervace klienta ${details.clientName} (${details.clientEmail}) na službu ${details.serviceTitle} dne ${cDate} v ${cTime} byla zrušena.${details.reason ? ` Důvod: ${details.reason}` : ''}`;
 
   // Option A: Send via Resend API if configured
   if (resendApiKey) {
@@ -439,7 +456,7 @@ SW-Barber`;
           from: `SW-Barber <${senderAddress}>`,
           reply_to: senderAddress,
           to: details.clientEmail,
-          subject: `SW-Barber | Storno rezervace - ${details.date} ${details.time}`,
+          subject: `SW-Barber | Storno rezervace - ${cDate} ${cTime}`,
           text: clientText,
           html: clientHtml,
         }),
@@ -447,7 +464,7 @@ SW-Barber`;
           from: `SW-Barber <${senderAddress}>`,
           reply_to: details.clientEmail,
           to: barberEmail,
-          subject: `SW-Barber | [Storno] Rezervace zrušena: ${details.clientName} (${details.date})`,
+          subject: `SW-Barber | [Storno] Rezervace zrušena: ${details.clientName} (${cDate})`,
           text: barberText,
           html: barberHtml,
         }),
@@ -468,7 +485,7 @@ SW-Barber`;
         from: `"SW-Barber" <${emailUser}>`,
         replyTo: emailUser,
         to: details.clientEmail,
-        subject: `SW-Barber | Storno rezervace - ${details.date} ${details.time}`,
+        subject: `SW-Barber | Storno rezervace - ${cDate} ${cTime}`,
         text: clientText,
         html: clientHtml,
       }),
@@ -476,7 +493,7 @@ SW-Barber`;
         from: `"SW-Barber" <${emailUser}>`,
         replyTo: details.clientEmail,
         to: barberEmail,
-        subject: `SW-Barber | [Storno] Rezervace zrušena: ${details.clientName} (${details.date})`,
+        subject: `SW-Barber | [Storno] Rezervace zrušena: ${details.clientName} (${cDate})`,
         text: barberText,
         html: barberHtml,
       }),
