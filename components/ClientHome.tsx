@@ -20,6 +20,31 @@ interface ClientHomeProps {
 
 function parseSettingsToCmsConfig(s: Record<string, string>, base: CmsConfig): CmsConfig {
   if (!s || typeof s !== 'object' || Object.keys(s).length === 0) return base;
+
+  let scheduleTemplates = base.scheduleTemplates;
+  if (s.schedule_templates) {
+    try {
+      const parsed = JSON.parse(s.schedule_templates);
+      if (Array.isArray(parsed)) {
+        scheduleTemplates = parsed;
+      }
+    } catch (e) {
+      console.error('[parseSettingsToCmsConfig] Error parsing schedule_templates:', e);
+    }
+  }
+
+  let blockedDays = base.blockedDays;
+  if (s.blocked_days) {
+    try {
+      const parsed = JSON.parse(s.blocked_days);
+      if (Array.isArray(parsed)) {
+        blockedDays = parsed;
+      }
+    } catch (e) {
+      console.error('[parseSettingsToCmsConfig] Error parsing blocked_days:', e);
+    }
+  }
+
   return {
     ...base,
     shopName: s.shop_name || s.barber_name || base.shopName,
@@ -45,6 +70,8 @@ function parseSettingsToCmsConfig(s: Record<string, string>, base: CmsConfig): C
     personalInstagramEnabled: s.personal_instagram_enabled !== undefined ? s.personal_instagram_enabled === 'true' : base.personalInstagramEnabled,
     primaryColor: s.primary_color || base.primaryColor,
     secondaryColor: s.secondary_color || base.secondaryColor,
+    scheduleTemplates,
+    blockedDays,
   };
 }
 
@@ -363,11 +390,28 @@ export default function ClientHome({ initialServices, initialGallery, initialSet
 
   const handleDeleteReservation = async (id: string) => {
     try {
-      await fetch(`/api/orders?id=${id}`, { method: 'DELETE' });
-      setReservations((prev) => prev.filter((r) => r.id !== id));
+      const res = await fetch(`/api/orders?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setReservations((prev) => prev.filter((r) => r.id !== id));
+      } else {
+        console.error('[handleDeleteReservation] Failed to delete order');
+      }
     } catch (err) {
-      setReservations((prev) => prev.filter((r) => r.id !== id));
+      console.error('[handleDeleteReservation] Error:', err);
     }
+  };
+
+  const handlePurgePastReservations = async (): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/orders?purge=past', { method: 'DELETE' });
+      if (res.ok) {
+        await loadData();
+        return true;
+      }
+    } catch (err) {
+      console.error('[handlePurgePastReservations] Error:', err);
+    }
+    return false;
   };
 
   const handleReservationCreated = (newRes: Reservation) => {
@@ -417,8 +461,10 @@ export default function ClientHome({ initialServices, initialGallery, initialSet
         onSaveGallery={handleSaveGallery}
         onUpdateReservationStatus={handleUpdateReservationStatus}
         onDeleteReservation={handleDeleteReservation}
+        onPurgePastReservations={handlePurgePastReservations}
         onRefreshData={loadData}
       />
     </div>
   );
 }
+

@@ -16,6 +16,7 @@ interface AdminModalProps {
   onSaveGallery: (gallery: GalleryItem[]) => Promise<void>;
   onUpdateReservationStatus: (id: string, status: 'confirmed' | 'cancelled' | 'completed', reason?: string) => Promise<void>;
   onDeleteReservation: (id: string) => Promise<void>;
+  onPurgePastReservations?: () => Promise<boolean>;
   onRefreshData: () => void;
 }
 
@@ -33,6 +34,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onSaveGallery,
   onUpdateReservationStatus,
   onDeleteReservation,
+  onPurgePastReservations,
   onRefreshData,
 }) => {
   if (!isOpen) return null;
@@ -179,9 +181,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       setServicesDraft(services);
       setGalleryDraft(gallery);
       setCmsDraft(cmsConfig);
+      if (cmsConfig.scheduleTemplates) {
+        setTemplatesList(cmsConfig.scheduleTemplates);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, cmsConfig]);
 
   useEffect(() => {
     if (isOpen && activeTab === 'schedules' && selectedCalendarDate) {
@@ -628,6 +633,26 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       >
                         <RefreshCw className="w-4 h-4" />
                       </button>
+                      {onPurgePastReservations && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (confirm('Opravdu chcete promazat všechny uplynulé rezervace z databáze Supabase?')) {
+                              const ok = await onPurgePastReservations();
+                              if (ok) {
+                                alert('Uplynulé rezervace byly úspěšně promazány z databáze.');
+                              } else {
+                                alert('Chyba při promazávání rezervací.');
+                              }
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-700/50 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                          title="Promazat uplynulé rezervace z databáze"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline">Promazat uplynulé</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -695,9 +720,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                     </button>
                                   )}
                                   <button
-                                    onClick={() => onDeleteReservation(resItem.id)}
+                                    onClick={() => {
+                                      if (confirm('Opravdu chcete tuto rezervaci trvale smazat z databáze?')) {
+                                        onDeleteReservation(resItem.id);
+                                      }
+                                    }}
                                     className="p-1 rounded bg-zinc-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-200"
-                                    title="Smazat záznam"
+                                    title="Smazat záznam z databáze"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>

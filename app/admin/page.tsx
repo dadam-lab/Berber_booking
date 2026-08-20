@@ -376,6 +376,30 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteOrder = async (id: string) => {
+    if (!confirm('Opravdu chcete tuto rezervaci trvale smazat z databáze?')) return;
+    try {
+      const res = await fetch(`/api/orders?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      showToast('Rezervace byla trvale smazána z databáze.');
+      loadAllData();
+    } catch (err) {
+      showToast('Chyba při mazání rezervace.', 'error');
+    }
+  };
+
+  const handlePurgePastOrders = async () => {
+    if (!confirm('Opravdu chcete promazat všechny uplynulé rezervace z databáze Supabase?')) return;
+    try {
+      const res = await fetch('/api/orders?purge=past', { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      showToast('Uplynulé rezervace byly promazány z databáze.');
+      loadAllData();
+    } catch (err) {
+      showToast('Chyba při promazávání rezervací.', 'error');
+    }
+  };
+
   // Execute Bulk Cancellation from Barber Cancellation Interface
   const handleExecuteBulkCancel = async () => {
     const datesToCancel = cancelTargetDates.length > 0 ? cancelTargetDates : [selectedDate];
@@ -1237,9 +1261,18 @@ export default function AdminPage() {
           {/* TAB 3: OBJEDNÁVKY */}
           {activeTab === 'orders' && (
             <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-white">Přehled Objednávek</h2>
-                <p className="text-xs text-slate-400">Seznam všech nadcházejících i proběhlých rezervací.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Přehled Objednávek</h2>
+                  <p className="text-xs text-slate-400">Seznam všech nadchádzajících i proběhlých rezervací.</p>
+                </div>
+                <button
+                  onClick={handlePurgePastOrders}
+                  className="px-3.5 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-semibold flex items-center gap-2 self-start sm:self-auto transition-all"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Promazat uplynulé rezervace</span>
+                </button>
               </div>
 
               <div className="overflow-x-auto">
@@ -1292,6 +1325,13 @@ export default function AdminPage() {
                               Storno
                             </button>
                           )}
+                          <button
+                            onClick={() => handleDeleteOrder(ord.id)}
+                            className="p-1 rounded bg-slate-800 hover:bg-rose-900 text-slate-400 hover:text-rose-200 inline-flex items-center align-middle"
+                            title="Smazat z databáze"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     ))}
